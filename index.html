@@ -574,10 +574,13 @@ function normalizeData(raw){
     d.balanceAnchor = {amount:num(raw.balanceAnchor.amount), at:num(raw.balanceAnchor.at)};
   } else if(num(raw.startBalanceAt)){
     // migration v1 → v2 : le décalage devient un solde réel daté. Le résultat
-    // affiché est identique, mais il résiste désormais à la fusion.
+    // affiché est identique, mais il résiste désormais à la fusion. On absorbe
+    // dans l'ancre exactement ce que countsAfterAnchor exclura ensuite, sinon la
+    // migration décalerait le solde de ces opérations.
     const at = num(raw.startBalanceAt);
+    const day = dayOf(at);
     const before = d.transactions
-      .filter(t=>(t.createdAt||0) <= at)
+      .filter(t=>!countsAfterAnchor(t, at, day))
       .reduce((sum,t)=>sum+t.amount, 0);
     d.balanceAnchor = {amount: num(raw.startBalance) + before, at};
   }
@@ -771,14 +774,33 @@ function render(){
   }
 }
 
-// Le solde s'ancre sur un solde réel constaté à une date donnée : seules les
-// opérations créées APRÈS ce constat s'y ajoutent. Contrairement à un décalage
-// (ancien startBalance), cet ancrage reste juste après une fusion à deux.
+// Le solde s'ancre sur un solde réel constaté un jour donné. Contrairement à un
+// décalage (ancien startBalance), cet ancrage reste juste après une fusion à deux.
+//
+// Ce qui compte, c'est la DATE de l'opération, pas le moment de sa saisie : le
+// solde relevé sur l'appli bancaire contient déjà tout ce qui est daté avant le
+// constat. Se fier à createdAt faisait recompter intégralement un relevé importé
+// après le calage — trois mois d'opérations ajoutés une seconde fois.
+function dayOf(ts){
+  const d = new Date(ts);
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+}
+// Le jour du constat lui-même est ambigu : impossible de savoir si l'opération
+// figurait déjà au relevé. On ajoute une saisie manuelle faite après le calage
+// (« je cale mon solde, puis je note mon déjeuner »), jamais une ligne importée,
+// qui vient par définition du relevé déjà constaté.
+function countsAfterAnchor(t, anchorAt, anchorDay){
+  if(!t || !t.date) return false;
+  if(t.date > anchorDay) return true;
+  if(t.date < anchorDay) return false;
+  return t.source !== 'import' && (t.createdAt||0) > anchorAt;
+}
 function currentBalance(){
   const a = state.balanceAnchor || {amount:0, at:0};
   if(!a.at) return state.transactions.reduce((s,t)=>s+t.amount,0);
+  const day = dayOf(a.at);
   return a.amount + state.transactions
-    .filter(t=>(t.createdAt||0) > a.at)
+    .filter(t=>countsAfterAnchor(t, a.at, day))
     .reduce((s,t)=>s+t.amount, 0);
 }
 function thisMonthTx(){
@@ -1337,6 +1359,7 @@ function importerHTML(){
       ${r.skipped>0 ? `<div class="banner">${r.skipped} doublon(s) déjà présent(s) ignoré(s).</div>` : ''}
       ${r.added===0 && r.matched>0 ? `<p class="muted" style="margin-top:14px;">Tout le relevé correspond à vos saisies : rien à classer.</p>` : ''}
       ${r.unknown>0 ? `<p class="muted" style="margin-top:14px;">Les lignes non identifiées sont mises en évidence dans l’app. Chaque fois que vous en classez une, l’import suivant reconnaîtra l’enseigne tout seul.</p>` : ''}
+      ${r.dateMax ? `<div style="border-top:1px solid var(--line-strong);margin-top:16px;padding-top:16px;"><p class="muted" style="font-size:12px;margin:0 0 10px;">Caler le solde à la date du relevé : le calcul ne recomptera pas cet import.</p><div style="display:flex;gap:10px;align-items:flex-end;"><div style="flex:1;"><label style="margin-top:0;font-size:12px;">Solde réel au ${r.dateMax.split('-').reverse().join('/')} (€)</label><input type="text" inputmode="decimal" id="imp-balance-val" placeholder="0,00" style="font-family:'JetBrains Mono',monospace;"></div><button class="primary" id="btn-anchor-balance" style="margin-top:0;width:auto;padding:13px 16px;flex:none;">Caler</button></div></div>` : ''}
       <button class="primary" id="btn-goto-history">${r.unknown>0?'Classer les non identifiées':'Aller à l’Historique'}</button>
       <button class="secondary" id="btn-new-import" style="margin-top:12px;">Importer un autre fichier</button>
     </div>`;
@@ -2148,7 +2171,7 @@ function attachHandlers(){
     const cur = currentBalance();
     const input = await askInput({
       title:'Caler le solde',
-      message:'Quel est le solde réel actuel de votre compte bancaire (€) ?\nL’app se calera dessus sans toucher aux opérations.',
+      message:'Quel est le solde réel actuel de votre compte bancaire (€) ?\nL’app se calera dessus sans toucher aux opérations. Tout ce qui est daté d’aujourd’hui ou avant est considéré comme déjà compris dans ce solde : vous pouvez donc importer vos relevés passés sans fausser le calcul.',
       value:String(cur.toFixed(2)).replace('.',','), numeric:true
     });
     if(input===null || input.trim()==='') return;
@@ -2830,6 +2853,17 @@ function attachImporterHandlers(){
     });
   }
   if(state.importStep===3){
+    const balBtn = document.getElementById('btn-anchor-balance');
+    if(balBtn) balBtn.onclick = ()=>{
+      const inp = document.getElementById('imp-balance-val');
+      if(!inp || !inp.value.trim()){ showToast('⚠ Indiquez un montant.', 'error'); return; }
+      if(!isValidAmountInput(inp.value)){ showToast('⚠ Montant invalide.', 'error'); return; }
+      const bal = parseUserAmount(inp.value);
+      state.balanceAnchor = {amount: bal, at: new Date(state.importResult.dateMax).getTime()};
+      saveData();
+      showToast(`Solde calé sur ${fmt(bal)} au ${state.importResult.dateMax.split('-').reverse().join('/')}`, 'ok');
+      render();
+    };
     document.getElementById('btn-goto-history').onclick = ()=>{ state.tab='historique'; state.historyFilters.cat='À catégoriser'; resetImport(); render(); };
     document.getElementById('btn-new-import').onclick = ()=>{ resetImport(); render(); };
   }
@@ -3093,7 +3127,11 @@ function confirmImport(){
     added++;
   });
   saveData();
-  state.importResult = {added, matched, skipped, classified, unknown};
+  const newDates = [];
+  state.importParsed.forEach(p=>{ if(p.status==='new') newDates.push(p.date); });
+  const dateMin = newDates.length ? newDates.sort()[0] : null;
+  const dateMax = newDates.length ? newDates.sort().reverse()[0] : null;
+  state.importResult = {added, matched, skipped, classified, unknown, dateMin, dateMax};
   importOnlyUnknown = false;
   state.importStep = 3;
   render();
@@ -3101,24 +3139,37 @@ function confirmImport(){
 
 // ---------- STOCKAGE ----------
 // Dans un artifact Claude, window.storage existe déjà. Hébergée ailleurs (GitHub
-// Pages…), on le remplace par Supabase. Le "code du foyer" fait partie de la clé
-// de stockage : vous deux devez saisir le même code sur chacun de vos appareils.
-const SUPABASE_URL = 'https://VOTRE-PROJET.supabase.co';   // ← à remplacer (Settings > API)
-const SUPABASE_ANON_KEY = 'VOTRE_CLE_ANON_PUBLIQUE';        // ← à remplacer (anon public key)
+// Pages, Netlify…), on le remplace par Supabase. Le "code du foyer" est le secret
+// partagé : vous deux saisissez le même code sur chacun de vos appareils, et lui
+// seul ouvre l'accès aux données côté serveur. Voir le SQL d'installation
+// (table foyer_kv + fonctions foyer_get / foyer_set) livré avec ce fichier.
+const SUPABASE_URL = 'https://xziremnnscfjcfexfgoy.supabase.co';
+// Clé publique côté navigateur : sb_publishable_... (ou l'ancienne clé anon,
+// dépréciée fin 2026). Elle est lisible par tout le monde et c'est normal :
+// c'est la RLS + le code du foyer qui protègent les données, pas cette clé.
+const SUPABASE_ANON_KEY = 'sb_publishable_d3UY4Vh4NsG3nHrSo9c6GQ_CxPBgTEH';
 
+// Le code n'est plus un simple préfixe de clé : côté Supabase, c'est le seul
+// secret qui ouvre l'accès aux données. Il doit donc être long.
+const FOYER_CODE_MIN = 12;
 async function ensureFoyerCode(){
   const saved = localStorage.getItem('foyer-code');
-  if(saved && saved.trim()) return saved.trim();
+  if(saved && saved.trim().length >= FOYER_CODE_MIN) return saved.trim();
   // annuler doit être possible : la boucle infinie de modales rendait l'app
   // inutilisable dès qu'on fermait la fenêtre de saisie
   const input = await askInput({
     title:'Code du foyer',
-    message:'Choisissez un code commun : le même pour vous deux, sur tous vos appareils. Il détermine quelles données vous partagez, donc long et impossible à deviner.',
-    placeholder:'ex: hirondelles-du-44-2026'
+    message:`Choisissez un code commun : le même pour vous deux, sur tous vos appareils. C'est lui — et lui seul — qui protège l'accès à vos données : ${FOYER_CODE_MIN} caractères minimum, impossible à deviner. Notez-le, il n'est récupérable nulle part.`,
+    placeholder:'ex: hirondelles-du-44-2026',
+    value: saved || ''
   });
   if(input===null || !input.trim()) throw new Error('Code du foyer non renseigné.');
-  localStorage.setItem('foyer-code', input.trim());
-  return input.trim();
+  const code = input.trim();
+  if(code.length < FOYER_CODE_MIN){
+    throw new Error(`Code du foyer trop court : ${FOYER_CODE_MIN} caractères minimum.`);
+  }
+  localStorage.setItem('foyer-code', code);
+  return code;
 }
 
 if(!window.storage){
@@ -3130,26 +3181,35 @@ if(!window.storage){
   // la clé passe AUSSI en paramètre d'URL : certains réseaux d'entreprise
   // retirent les en-têtes personnalisés (cause des échecs de sync du Suivi EPI)
   const sbQS = 'apikey=' + encodeURIComponent(SUPABASE_ANON_KEY);
+
+  // On ne touche JAMAIS la table en direct : elle est fermée par RLS. Tout passe
+  // par deux fonctions SECURITY DEFINER qui exigent le code du foyer. Sans lui,
+  // la clé anon — publique par nature, lisible dans le source — ne donne rien.
+  async function rpc(fn, body){
+    if(SUPABASE_URL.includes('VOTRE')) throw new Error('Supabase non configuré : renseignez SUPABASE_URL et SUPABASE_ANON_KEY en tête du script.');
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/rpc/${fn}?${sbQS}`, {
+      method:'POST', headers:sbHeaders, body:JSON.stringify(body)
+    });
+    if(!r.ok){
+      let detail = '';
+      try{ detail = (await r.json()).message || ''; }catch(e){}
+      throw new Error(`${fn} a échoué (${r.status})${detail ? ' : ' + detail : ''}`);
+    }
+    if(r.status === 204) return null;
+    const txt = await r.text();
+    return txt ? JSON.parse(txt) : null;
+  }
+
   window.storage = {
     async get(key){
-      if(SUPABASE_URL.includes('VOTRE')) throw new Error('Supabase non configuré : renseignez SUPABASE_URL et SUPABASE_ANON_KEY en tête du script.');
       const code = await ensureFoyerCode();
-      const k = encodeURIComponent(code + ':' + key);
-      const r = await fetch(`${SUPABASE_URL}/rest/v1/foyer_kv?select=v&k=eq.${k}&${sbQS}`, {headers:sbHeaders});
-      if(!r.ok) throw new Error('lecture impossible (' + r.status + ')');
-      const rows = await r.json();
-      if(!rows.length) return null;
-      return {key, value: rows[0].v, shared:true};
+      const v = await rpc('foyer_get', {p_code:code, p_key:key});
+      if(v == null) return null;
+      return {key, value:v, shared:true};
     },
     async set(key, value){
-      if(SUPABASE_URL.includes('VOTRE')) throw new Error('Supabase non configuré : renseignez SUPABASE_URL et SUPABASE_ANON_KEY en tête du script.');
       const code = await ensureFoyerCode();
-      const r = await fetch(`${SUPABASE_URL}/rest/v1/foyer_kv?on_conflict=k&${sbQS}`, {
-        method:'POST',
-        headers:{...sbHeaders, 'Prefer':'resolution=merge-duplicates'},
-        body: JSON.stringify([{k: code + ':' + key, v: value, updated_at: new Date().toISOString()}])
-      });
-      if(!r.ok) throw new Error('écriture impossible (' + r.status + ')');
+      await rpc('foyer_set', {p_code:code, p_key:key, p_value:value});
       return {key, value, shared:true};
     }
   };
