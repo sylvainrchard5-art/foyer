@@ -4,7 +4,14 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Foyer">
+<meta name="mobile-web-app-capable" content="yes">
 <meta name="theme-color" content="#0C120F">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
+<!-- iOS ignore le manifeste : c'est cette balise qui donne l'icône de l'écran d'accueil -->
+<link rel="apple-touch-icon" href="icon-192.png">
 <title>Foyer</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"
   integrity="sha384-vtjasyidUo0kW94K5MXDXntzOJpQgBKXmE7e2Ga4LG0skTTLeBi97eFAXsqewJjw"
@@ -387,6 +394,42 @@
   .chg.done .chg-label{color:var(--ink-soft);}
   .chg.done .chg-amt{color:var(--ink-faint);}
 
+  /* plafonds du mois */
+  .plaf-line{
+    display:flex;justify-content:space-between;align-items:center;gap:12px;
+    padding:10px 0;border-bottom:1px solid var(--line);
+  }
+  .plaf-lab{font-size:13px;color:var(--ink-soft);}
+  .plaf-note{font-size:11px;color:var(--ink-faint);margin-top:2px;}
+  .plaf-val{font-family:'JetBrains Mono',monospace;font-size:13.5px;font-weight:700;}
+  .plaf-total{
+    display:flex;justify-content:space-between;align-items:center;gap:12px;
+    padding:14px 0 2px;
+  }
+  .plaf-cat{padding:13px 0;border-bottom:1px solid var(--line);position:relative;}
+  .plaf-cat:last-child{border-bottom:none;}
+  .plaf-cat-top{
+    display:flex;justify-content:space-between;align-items:baseline;
+    gap:10px;margin-bottom:6px;padding-right:62px;
+  }
+  .plaf-cat-name{
+    font-size:13px;color:var(--ink);
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+  }
+  .plaf-cat-val{
+    flex:none;font-family:'JetBrains Mono',monospace;
+    font-size:12.5px;font-weight:700;
+  }
+  .plaf-rail{height:6px;border-radius:3px;background:var(--card-2);overflow:hidden;}
+  .plaf-fill{height:100%;border-radius:3px;}
+  .plaf-cat-foot{font-size:11px;margin-top:5px;color:var(--ink-faint);}
+  .plaf-edit{
+    position:absolute;top:10px;right:0;width:auto;margin:0;
+    padding:5px 10px;font-size:11px;
+    background:var(--card-2);color:var(--ink-soft);
+    border:1px solid var(--line-strong);border-radius:8px;
+  }
+
   /* détail d'une catégorie */
   .legend-row.drillable{cursor:pointer;}
   .legend-row.drillable:active{opacity:.6;}
@@ -630,6 +673,7 @@ let state = {
   recurring:[],
   upcoming:[],
   reserves:[],     // comptes en réserve {id,label,amount} : Livret A, épargne projet…
+  budgets:[],      // plafonds mensuels {category,amount,updatedAt} : ce qu'on s'autorise par poste
   events:[],       // planning partagé {id,title,date,time,note}
   notes:[],        // pense-bête partagé {id,text,done}
   balanceAnchor:{amount:0, at:0},   // solde réel constaté + date du constat
@@ -711,6 +755,15 @@ function mergeRemote(remote){
   state.recurring   = mergeColl(state.recurring,   remote.recurring);
   state.upcoming    = mergeColl(state.upcoming,    remote.upcoming);
   state.reserves    = mergeColl(state.reserves,    remote.reserves);
+  // plafonds : clé = catégorie (pas d'id), le plus récemment modifié l'emporte
+  const bByCat = new Map();
+  (remote.budgets||[]).forEach(b=>{ if(b && b.category) bByCat.set(b.category, b); });
+  (state.budgets||[]).forEach(b=>{
+    if(!b || !b.category) return;
+    const r = bByCat.get(b.category);
+    if(!r || (b.updatedAt||0) >= (r.updatedAt||0)) bByCat.set(b.category, b);
+  });
+  state.budgets = [...bByCat.values()].filter(b=>b.amount>0);
   state.events      = mergeColl(state.events,      remote.events);
   state.notes       = mergeColl(state.notes,       remote.notes);
   // catégories : union par nom (celles ajoutées par l'autre sont conservées)
@@ -752,6 +805,10 @@ function normalizeData(raw){
     upcoming: arr(raw.upcoming).filter(u=>u && u.id && typeof u.date === 'string')
       .map(u=>({...u, amount:num(u.amount)})),
     reserves: arr(raw.reserves).filter(r=>r && r.id).map(r=>({...r, amount:num(r.amount)})),
+    // plafonds mensuels par catégorie : une seule entrée par catégorie, montant positif
+    budgets: arr(raw.budgets).filter(b=>b && typeof b.category === 'string' && b.category.trim())
+      .map(b=>({category:b.category, amount:Math.abs(num(b.amount)), updatedAt:num(b.updatedAt)}))
+      .filter(b=>b.amount>0),
     events: arr(raw.events).filter(e=>e && e.id && typeof e.date === 'string'),
     notes: arr(raw.notes).filter(n=>n && n.id && typeof n.text === 'string'),
     deleted: purgeTombstones(raw.deleted),
@@ -782,6 +839,7 @@ function payload(){
     recurring:state.recurring,
     upcoming:state.upcoming,
     reserves:state.reserves,
+    budgets:state.budgets,
     events:state.events,
     notes:state.notes,
     balanceAnchor:state.balanceAnchor,
@@ -2079,6 +2137,203 @@ function projectionSeries(horizon){
   return {data:d, series, avgVar, inRec, outRec};
 }
 
+// ---------- PLAFONDS DU MOIS ----------
+// Le raisonnement : ce qui rentre ce mois-ci, moins ce qui est déjà engagé
+// (charges fixes et frais prévus), donne l'enveloppe réellement arbitrable.
+// Les plafonds par catégorie se calent dessus — s'ils la dépassent, le mois
+// est déficitaire avant même d'avoir commencé.
+const budgetOf = cat => (state.budgets.find(b=>b.category===cat) || {}).amount || 0;
+
+function setBudget(cat, amount){
+  const i = state.budgets.findIndex(b=>b.category===cat);
+  if(amount > 0){
+    const entry = {category:cat, amount, updatedAt:Date.now()};
+    if(i>=0) state.budgets[i] = entry; else state.budgets.push(entry);
+  } else if(i>=0){
+    state.budgets.splice(i,1);
+  }
+  saveData();
+}
+
+// Les catégories qui relèvent d'un plafond : ni revenus, ni épargne, ni
+// mouvements internes — on ne se fixe pas un plafond sur son salaire.
+function budgetableCats(){
+  const exclues = new Set([SAVINGS_CAT, 'Virements reçus / Revenus', 'À catégoriser']);
+  return state.categories.filter(c=>!exclues.has(c.name));
+}
+
+function moisPrevision(){
+  const mk = todayISO().slice(0,7);
+  const a = monthAnalysis(mk);
+  const recLines = a.recLines;
+
+  // revenus : ce qui est déjà tombé + les revenus récurrents pas encore vus
+  const recIn = recLines.filter(r=>r.type==='income');
+  const inAVenir = recIn.filter(r=>r.st!=='fait' && r.st!=='probable')
+                        .reduce((s,r)=>s+Math.abs(r.amount),0);
+  const revenusTotal = a.revenus + inAVenir;
+
+  // engagé : charges fixes restantes + frais ponctuels prévus non encore passés
+  const engage = a.fixeAVenir + a.upAVenir;
+
+  // dépenses déjà faites hors charges fixes retrouvées = le quotidien déjà consommé
+  const quotidienFait = a.variable;
+
+  // ce qu'il reste réellement pour le quotidien jusqu'à la fin du mois
+  const enveloppe = revenusTotal - a.fixePasse - engage;   // pour tout le quotidien du mois
+  const restant = enveloppe - quotidienFait;
+
+  // consommation par catégorie sur le mois, hors charges fixes déclarées
+  const parCat = new Map();
+  a.tx.filter(t=>t.amount<0 && !isSavings(t)).forEach(t=>{
+    const c = t.category || 'Non catégorisé';
+    parCat.set(c, (parCat.get(c)||0) + Math.abs(t.amount));
+  });
+
+  const catsFixes = new Set(state.recurring.filter(r=>r.type==='expense').map(r=>r.category));
+  const lignes = budgetableCats().map(c=>({
+    name: c.name,
+    color: c.color,
+    plafond: budgetOf(c.name),
+    depense: parCat.get(c.name) || 0,
+    fixe: catsFixes.has(c.name)
+  })).filter(l=>l.plafond>0 || l.depense>0)
+     // les postes arbitrables d'abord : ce sont eux sur lesquels on peut agir
+     .sort((x,y)=>(x.fixe?1:0)-(y.fixe?1:0) || (y.plafond||y.depense)-(x.plafond||x.depense));
+
+  const totalPlafonds = lignes.reduce((s,l)=>s+l.plafond,0);
+  const nPlafonds = lignes.filter(l=>l.plafond>0).length;
+
+  return {mk, a, revenusTotal, inAVenir, engage, enveloppe, quotidienFait,
+          restant, lignes, totalPlafonds, nPlafonds};
+}
+
+// Proposition de plafonds d'après les 3 derniers mois révolus, remise à l'échelle
+// de l'enveloppe disponible : on part des habitudes réelles plutôt que d'une
+// répartition théorique, puis on resserre si le train de vie dépasse les revenus.
+function proposerPlafonds(){
+  const p = moisPrevision();
+  const mks = lastMonths(3);
+  const moyennes = new Map();
+  const fixes = new Set(state.recurring.filter(r=>r.type==='expense').map(r=>r.category));
+
+  state.transactions.forEach(t=>{
+    if(t.amount>=0 || isSavings(t)) return;
+    if(!mks.includes(monthKey(t.date))) return;
+    const c = t.category || 'Non catégorisé';
+    if(fixes.has(c)) return;              // déjà couvert par les charges fixes
+    moyennes.set(c, (moyennes.get(c)||0) + Math.abs(t.amount)/mks.length);
+  });
+
+  const noms = new Set(budgetableCats().map(c=>c.name));
+  const retenues = [...moyennes.entries()].filter(([c,v])=>noms.has(c) && v>=5);
+  if(!retenues.length) return 0;
+
+  const total = retenues.reduce((s,[,v])=>s+v,0);
+  const cible = p.enveloppe;
+  // si les habitudes tiennent dans l'enveloppe on les garde telles quelles,
+  // sinon on réduit tout proportionnellement pour rentrer dans les revenus
+  const k = (cible>0 && total>cible) ? cible/total : 1;
+
+  retenues.forEach(([c,v])=>{
+    const arrondi = Math.max(5, Math.round(v*k/5)*5);   // au pas de 5 €, plus lisible
+    const i = state.budgets.findIndex(b=>b.category===c);
+    const entry = {category:c, amount:arrondi, updatedAt:Date.now()};
+    if(i>=0) state.budgets[i] = entry; else state.budgets.push(entry);
+  });
+  saveData();
+  return retenues.length;
+}
+
+function plafondsHTML(){
+  const p = moisPrevision();
+  const dispo = p.enveloppe;
+  const reste = p.restant;
+  const ecart = dispo - p.totalPlafonds;
+
+  const cadre = [
+    ['Revenus du mois', p.revenusTotal, 'var(--mint)', p.inAVenir>0 ? `dont ${fmt(p.inAVenir)} encore attendus` : 'tous encaissés'],
+    ['Charges fixes', -(p.a.fixePasse + p.a.fixeAVenir), 'var(--lilac)', p.a.fixeAVenir>0 ? `dont ${fmt(p.a.fixeAVenir)} à tomber` : 'toutes passées'],
+    ['Frais prévus', -p.a.upAVenir, 'var(--gold)', p.a.upAVenir>0 ? 'ponctuels, à venir' : 'aucun'],
+  ].map(([l,v,c,note])=>`
+    <div class="plaf-line">
+      <div>
+        <div class="plaf-lab">${l}</div>
+        <div class="plaf-note">${note}</div>
+      </div>
+      <span class="plaf-val" style="color:${c}">${v<0?'−':'+'}${fmt(Math.abs(v))}</span>
+    </div>`).join('');
+
+  const lignes = p.lignes.map(l=>{
+    const pct = l.plafond>0 ? Math.min(100, Math.round(l.depense/l.plafond*100)) : 0;
+    const depasse = l.plafond>0 && l.depense>l.plafond;
+    const proche = !depasse && l.plafond>0 && l.depense >= l.plafond*0.8;
+    const teinte = depasse ? 'var(--coral)' : proche ? 'var(--gold)' : l.color;
+    const restantCat = l.plafond - l.depense;
+    // un poste porté par une charge fixe déclarée n'est pas arbitrable : on
+    // n'invite pas à lui fixer un plafond, ce serait un conseil trompeur
+    const pied = l.plafond>0
+      ? `<div class="plaf-cat-foot" style="color:${depasse?'var(--coral)':'var(--ink-faint)'}">
+           ${depasse ? `dépassé de ${fmt(l.depense-l.plafond)}` : `il reste ${fmt(restantCat)}`}
+         </div>`
+      : l.fixe
+        ? `<div class="plaf-cat-foot">porté par vos charges fixes</div>`
+        : `<div class="plaf-cat-foot">aucun plafond — <span style="color:var(--sky);">appuyez pour en définir un</span></div>`;
+    return `
+    <div class="plaf-cat">
+      <div class="plaf-cat-top">
+        <span class="plaf-cat-name">${escapeHTML(l.name)}</span>
+        <span class="plaf-cat-val" style="color:${teinte}">
+          ${fmt(l.depense)}${l.plafond>0?` <span style="color:var(--ink-faint);font-weight:400;">/ ${fmt(l.plafond)}</span>`:''}
+        </span>
+      </div>
+      ${l.plafond>0 ? `
+      <div class="plaf-rail"><div class="plaf-fill" style="width:${pct}%;background:${teinte};"></div></div>` : ''}
+      ${pied}
+      <button type="button" class="plaf-edit" data-budget="${escapeHTML(l.name)}">modifier</button>
+    </div>`;
+  }).join('');
+
+  return `
+    <div class="card">
+      ${cadre}
+      <div class="plaf-total">
+        <div>
+          <div class="plaf-lab" style="color:var(--ink);">Pour le quotidien</div>
+          <div class="plaf-note">après charges fixes et frais prévus</div>
+        </div>
+        <span class="plaf-val" style="font-size:20px;color:${dispo>=0?'var(--mint)':'var(--coral)'}">${fmt(dispo)}</span>
+      </div>
+      ${dispo<0 ? `<div class="banner warn" style="margin-top:14px;">
+        ⚠ Les charges fixes et frais prévus dépassent déjà les revenus attendus de ${fmt(-dispo)}. Il faudra puiser dans les réserves.</div>` : `
+      <div style="margin-top:12px;font-size:12.5px;color:var(--ink-soft);line-height:1.6;">
+        Déjà dépensé au quotidien : <strong style="font-family:'JetBrains Mono',monospace;color:var(--ink);">${fmt(p.quotidienFait)}</strong><br>
+        Reste jusqu'à la fin du mois : <strong style="font-family:'JetBrains Mono',monospace;color:${reste>=0?'var(--mint)':'var(--coral)'};">${fmt(reste)}</strong>
+      </div>`}
+    </div>
+
+    ${p.nPlafonds>0 ? `
+    <div class="card" style="border-left:3px solid ${ecart>=0?'var(--mint)':'var(--coral)'};">
+      <div style="display:flex;justify-content:space-between;align-items:baseline;gap:10px;">
+        <span class="mois-eyebrow">Total des plafonds</span>
+        <span style="font-family:'JetBrains Mono',monospace;font-weight:700;font-size:14px;">${fmt(p.totalPlafonds)}</span>
+      </div>
+      <div style="margin-top:8px;font-size:12.5px;color:${ecart>=0?'var(--ink-soft)':'var(--coral)'};line-height:1.6;">
+        ${ecart>=0
+          ? `Ils tiennent dans l'enveloppe, avec ${fmt(ecart)} de marge.`
+          : `Ils dépassent de ${fmt(-ecart)} ce que vous pouvez dépenser sans entamer vos réserves. Baissez un ou plusieurs postes.`}
+      </div>
+    </div>` : ''}
+
+    <button class="secondary" id="btn-proposer-plafonds" style="margin-bottom:16px;">
+      Proposer des plafonds d'après mes 3 derniers mois
+    </button>
+
+    <div class="card">
+      ${p.lignes.length ? lignes : '<div class="empty"><div class="big">Aucun poste à plafonner</div>Ajoutez des dépenses ou définissez des plafonds pour suivre votre quotidien.</div>'}
+    </div>`;
+}
+
 function previsionnelHTML(){
   const {data:d, series, avgVar, inRec, outRec} = projectionSeries(projHorizon);
   const nProbable = d.recLines.filter(r=>r.st==='probable').length;
@@ -2097,6 +2352,9 @@ function previsionnelHTML(){
   const monthlyMargin = inRec - outRec - avgVar;
 
   return `
+    <h2 class="section-title">Plafonds du mois</h2>
+    ${plafondsHTML()}
+
     <h2 class="section-title">Projection</h2>
     <div class="card" style="padding:22px 18px;">
       <div class="toggle-group" style="margin-bottom:18px;">${horizonBtns}</div>
@@ -2515,6 +2773,39 @@ function previsionnelListsHTML(){
 }
 
 function attachPrevisionnelHandlers(){
+  // --- plafonds ---
+  document.querySelectorAll('[data-budget]').forEach(b=>{
+    b.onclick = async ()=>{
+      const cat = b.dataset.budget;
+      const actuel = budgetOf(cat);
+      const saisie = await askInput({
+        title:`Plafond — ${cat}`,
+        message:'Montant maximum que vous vous autorisez sur ce poste ce mois-ci.\nLaissez vide pour retirer le plafond.',
+        value: actuel>0 ? String(actuel).replace('.',',') : '',
+        placeholder:'0,00', numeric:true, okLabel:'Enregistrer'
+      });
+      if(saisie===null) return;
+      if(saisie.trim()===''){ setBudget(cat, 0); showToast('Plafond retiré', 'ok'); render(); return; }
+      if(!isValidAmountInput(saisie)){ showToast('⚠ Montant invalide.', 'error'); return; }
+      const v = Math.abs(parseUserAmount(saisie));
+      setBudget(cat, v);
+      showToast(v>0 ? `Plafond fixé à ${fmt(v)}` : 'Plafond retiré', 'ok');
+      render();
+    };
+  });
+  const prop = document.getElementById('btn-proposer-plafonds');
+  if(prop) prop.onclick = async ()=>{
+    const ok = await askConfirm(
+      'Des plafonds vont être proposés d’après vos dépenses des 3 derniers mois, hors charges fixes.\n\n'
+      + 'S’ils dépassent ce que vos revenus permettent, ils seront réduits proportionnellement. Vos plafonds actuels seront remplacés.',
+      'Proposer');
+    if(!ok) return;
+    const n = proposerPlafonds();
+    if(!n){ showToast('Pas assez d’historique sur les 3 derniers mois pour proposer des plafonds.', 'error'); return; }
+    showToast(`${n} plafond(s) proposé(s) — ajustez-les à votre main.`, 'ok');
+    render();
+  };
+
   document.querySelectorAll('[data-horizon]').forEach(b=>{
     b.onclick = ()=>{ projHorizon = parseInt(b.dataset.horizon,10); render(); };
   });
@@ -3521,6 +3812,7 @@ function handleRestoreJSON(e){
       state.recurring = data.recurring;
       state.upcoming = data.upcoming;
       state.reserves = data.reserves;
+      state.budgets = data.budgets;
       state.events = data.events;
       state.notes = data.notes;
       state.balanceAnchor = data.balanceAnchor;
