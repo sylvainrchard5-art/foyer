@@ -283,6 +283,185 @@
   .filters select, .filters input{flex:1;min-width:110px;padding:10px 12px;font-size:13px;}
 
   .empty{text-align:center;padding:44px 20px;color:var(--ink-soft);}
+
+  /* ===== Le mois : ligne de vie, jauge, statuts ===== */
+  .mois-head{
+    display:flex;align-items:baseline;justify-content:space-between;
+    gap:12px;margin-bottom:2px;
+  }
+  .mois-eyebrow{
+    font-family:'Sora',sans-serif;font-size:10.5px;font-weight:700;
+    letter-spacing:.2em;text-transform:uppercase;color:var(--ink-faint);
+  }
+  .mois-big{
+    font-family:'Sora',sans-serif;font-weight:800;letter-spacing:-.02em;
+    font-size:34px;line-height:1.05;margin:6px 0 0;
+  }
+  .mois-big .cents{font-size:17px;font-weight:600;opacity:.65;}
+  .mois-sub{font-size:12.5px;color:var(--ink-soft);margin-top:7px;line-height:1.55;}
+
+  /* la silhouette du mois : une barre par jour de prélèvement, hauteur = montant */
+  .ligne-mois{
+    position:relative;
+    height:104px;
+    margin:24px 0 6px;
+  }
+  .ligne-rail{
+    position:absolute;left:0;right:0;bottom:22px;height:1px;
+    background:var(--line-strong);
+  }
+  .ligne-fill{
+    position:absolute;left:0;bottom:22px;height:1px;
+    background:var(--mint);opacity:.6;
+  }
+  .ligne-today{
+    position:absolute;bottom:22px;top:0;width:1px;
+    background:linear-gradient(var(--mint),rgba(94,226,160,.15));
+    opacity:.5;
+  }
+  .ligne-today span{
+    position:absolute;top:-2px;left:-15px;width:30px;text-align:center;
+    font-family:'JetBrains Mono',monospace;font-size:8.5px;
+    letter-spacing:.08em;color:var(--mint);
+  }
+  .bar{
+    position:absolute;bottom:22px;width:7px;margin-left:-3.5px;
+    border-radius:3px 3px 0 0;
+    background:var(--mint);
+    cursor:pointer;
+  }
+  .bar.todo{
+    background:linear-gradient(var(--coral),rgba(255,126,103,.25));
+  }
+  .bar.maybe{background:var(--sky);}
+  .bar-amt{
+    position:absolute;bottom:100%;left:50%;transform:translateX(-50%);
+    margin-bottom:5px;
+    font-family:'JetBrains Mono',monospace;font-size:9px;font-weight:700;
+    color:var(--ink-soft);white-space:nowrap;
+  }
+  .ligne-day{
+    position:absolute;bottom:6px;
+    font-family:'JetBrains Mono',monospace;font-size:9.5px;
+    color:var(--ink-faint);transform:translateX(-50%);
+    white-space:nowrap;
+  }
+  .ligne-legend{
+    display:flex;flex-wrap:wrap;gap:14px;margin-top:4px;
+    font-size:11px;color:var(--ink-soft);
+  }
+  .ligne-legend i{
+    display:inline-block;width:8px;height:8px;border-radius:2px;
+    margin-right:5px;vertical-align:middle;
+  }
+
+  /* jauge subi / arbitrable */
+  .jauge{
+    display:flex;height:10px;border-radius:6px;overflow:hidden;
+    background:var(--card-2);margin:6px 0 10px;
+  }
+  .jauge span{display:block;height:100%;}
+
+  /* lignes de charges */
+  .chg{
+    display:flex;align-items:center;gap:11px;
+    padding:11px 0;border-bottom:1px solid var(--line);
+  }
+  .chg:last-child{border-bottom:none;}
+  .chg-day{
+    flex:none;width:34px;text-align:center;
+    font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:700;
+    color:var(--ink-faint);
+  }
+  .chg-body{flex:1;min-width:0;}
+  .chg-label{
+    font-size:13.5px;font-weight:500;
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+  }
+  .chg-state{font-size:10.5px;letter-spacing:.03em;margin-top:2px;}
+  .chg-amt{
+    flex:none;font-family:'JetBrains Mono',monospace;
+    font-size:13px;font-weight:700;
+  }
+  .chg.todo .chg-label{color:var(--ink);}
+  .chg.done .chg-label{color:var(--ink-soft);}
+  .chg.done .chg-amt{color:var(--ink-faint);}
+
+  /* détail d'une catégorie */
+  .legend-row.drillable{cursor:pointer;}
+  .legend-row.drillable:active{opacity:.6;}
+  .drill-arrow{
+    flex:none;margin-left:6px;color:var(--ink-faint);
+    font-size:17px;line-height:1;
+  }
+  .drill-mois{
+    display:flex;justify-content:space-between;align-items:baseline;
+    padding:14px 0 8px;margin-top:4px;
+    border-bottom:1px solid var(--line-strong);
+    font-family:'Sora',sans-serif;font-size:11px;font-weight:700;
+    letter-spacing:.14em;text-transform:uppercase;color:var(--ink-soft);
+  }
+  .drill-row{padding:11px 0;border-bottom:1px solid var(--line);}
+  .drill-row:last-child{border-bottom:none;}
+  .drill-line{display:flex;align-items:baseline;gap:9px;}
+  .drill-date{
+    flex:none;font-family:'JetBrains Mono',monospace;
+    font-size:11px;color:var(--ink-faint);
+  }
+  .drill-desc{
+    flex:1;min-width:0;font-size:13px;
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+  }
+  .drill-amt{
+    flex:none;font-family:'JetBrains Mono',monospace;
+    font-size:12.5px;font-weight:700;color:var(--coral);
+  }
+  select.drill-cat{
+    width:auto;max-width:60%;margin:6px 0 0 auto;display:block;
+    padding:6px 26px 6px 10px;
+    font-size:11.5px;background-color:var(--card-2);
+    color:var(--ink-soft);
+  }
+
+  /* barres empilées : un mois par ligne, segments = catégories */
+  .mrow{margin-bottom:14px;}
+  .mrow:last-of-type{margin-bottom:6px;}
+  .mrow-top{
+    display:flex;justify-content:space-between;align-items:baseline;
+    gap:10px;margin-bottom:6px;
+  }
+  .mrow-mois{font-size:12.5px;color:var(--ink);text-transform:capitalize;}
+  .mrow-tot{
+    font-family:'JetBrains Mono',monospace;font-size:12px;
+    font-weight:700;color:var(--ink-soft);
+  }
+  .mrow-rail{height:14px;border-radius:4px;background:var(--card-2);overflow:hidden;}
+  .mrow-stack{display:flex;height:100%;border-radius:4px;overflow:hidden;}
+  /* un filet sombre entre segments : sans lui, deux catégories de teintes voisines
+     (deux oranges par exemple) se lisent comme un seul bloc */
+  .mrow-stack span{display:block;height:100%;box-shadow:inset -1px 0 0 var(--card);}
+  .mrow-stack span:last-child{box-shadow:none;}
+
+  /* barres par catégorie */
+  .catbar{margin:0 0 13px;}
+  .catbar-top{
+    display:flex;justify-content:space-between;align-items:baseline;
+    gap:10px;margin-bottom:5px;
+  }
+  .catbar-name{
+    font-size:12.5px;color:var(--ink);
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+  }
+  .catbar-val{
+    flex:none;font-family:'JetBrains Mono',monospace;
+    font-size:12px;font-weight:700;color:var(--ink-soft);
+  }
+  .catbar-rail{height:5px;border-radius:3px;background:var(--card-2);overflow:hidden;}
+  .catbar-fill{height:100%;border-radius:3px;}
+
+  @media (prefers-reduced-motion: reduce){
+    .pt{transition:none;}
+  }
   .empty .big{font-family:'Sora',sans-serif;font-size:16px;color:var(--ink);margin-bottom:6px;}
 
   table.preview{width:100%;border-collapse:collapse;font-size:12.5px;margin-top:12px;}
@@ -737,6 +916,27 @@ function askInput(opts){
     ov.onclick = e => { if(e.target===ov) done(null); };
   });
 }
+// résout avec le nom de catégorie choisi, ou null si annulé
+function askCategory(opts){
+  return new Promise(resolve=>{
+    const opts_ = state.categories
+      .filter(c=>c.name!==(opts.exclude||''))
+      .map(c=>`<option value="${escapeHTML(c.name)}">${escapeHTML(c.name)}</option>`).join('');
+    const ov = openModal(`
+      ${opts.title ? `<h3 class="modal-title">${opts.title}</h3>` : ''}
+      ${opts.message ? `<p class="modal-msg">${opts.message}</p>` : ''}
+      <select id="modal-cat" style="width:100%;">${opts_}</select>
+      <div class="modal-actions">
+        <button class="secondary" id="modal-cancel">Annuler</button>
+        <button class="primary" id="modal-ok">${opts.okLabel||'Reclasser'}</button>
+      </div>`);
+    const sel = ov.querySelector('#modal-cat');
+    const done = v => { closeModal(); resolve(v); };
+    ov.querySelector('#modal-ok').onclick = ()=>done(sel.value);
+    ov.querySelector('#modal-cancel').onclick = ()=>done(null);
+    ov.onclick = e => { if(e.target===ov) done(null); };
+  });
+}
 // montant valide : chiffres, espaces, virgule ou point (2 décimales max), signe autorisé
 function isValidAmountInput(s){
   return /^-?[\d\s]+([.,]\d{1,2})?$/.test(String(s).trim());
@@ -868,6 +1068,8 @@ function bottomNavHTML(){
 }
 
 function tabContentHTML(){
+  // la vue détaillée d'une catégorie se superpose à l'onglet courant
+  if(drill) return drillHTML();
   if(state.tab==='apercu') return apercuHTML();
   if(state.tab==='previsionnel') return previsionnelHTML();
   if(state.tab==='planning') return planningHTML();
@@ -878,6 +1080,290 @@ function tabContentHTML(){
 }
 
 // ---------- APERÇU ----------
+// ---------- ÉVOLUTION PAR CATÉGORIE (onglet Aperçu) ----------
+let apercuPeriod = 3; // nombre de mois terminés affichés
+
+// Les N derniers mois RÉVOLUS, du plus récent au plus ancien. Le mois en cours est
+// écarté : il est incomplet, le comparer à des mois pleins fausserait toute lecture.
+function lastMonths(n){
+  const now = new Date();
+  const out = [];
+  for(let i=1;i<=n;i++){
+    const d = new Date(now.getFullYear(), now.getMonth()-i, 1);
+    out.push(`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`);
+  }
+  return out;
+}
+
+const TOP_CATS = 6; // au-delà, l'empilement devient illisible et les couleurs se brouillent
+
+// Retourne, pour la période : le total par catégorie, le détail mois par mois,
+// et la tendance du dernier mois face à la moyenne des précédents.
+function periodBreakdown(mks){
+  const perMonth = new Map();   // mk -> Map(cat -> montant)
+  const totals   = new Map();   // cat -> montant sur toute la période
+  mks.forEach(mk=>perMonth.set(mk, new Map()));
+
+  state.transactions.forEach(t=>{
+    if(t.amount>=0 || isSavings(t)) return;
+    const mk = monthKey(t.date);
+    if(!perMonth.has(mk)) return;
+    const cat = t.category || 'Non catégorisé';
+    const v = Math.abs(t.amount);
+    perMonth.get(mk).set(cat, (perMonth.get(mk).get(cat)||0) + v);
+    totals.set(cat, (totals.get(cat)||0) + v);
+  });
+
+  const ranked = [...totals.entries()].sort((a,b)=>b[1]-a[1]);
+  const keep = ranked.slice(0, TOP_CATS).map(([c])=>c);
+  const keepSet = new Set(keep);
+  const hasRest = ranked.length > TOP_CATS;
+
+  // regroupement du reste sous une entrée unique, pour garder l'empilement lisible
+  const segsFor = mk => {
+    const m = perMonth.get(mk);
+    const segs = keep.map(c=>({name:c, value:m.get(c)||0, color:catInfo(c).color}))
+                     .filter(s=>s.value>0);
+    if(hasRest){
+      let rest = 0;
+      m.forEach((v,c)=>{ if(!keepSet.has(c)) rest += v; });
+      if(rest>0) segs.push({name:'Autres catégories', value:rest, color:'#5C6B62'});
+    }
+    return segs;
+  };
+
+  const monthTotals = mks.map(mk=>{
+    let s = 0; perMonth.get(mk).forEach(v=>s+=v); return {mk, total:s, segs:segsFor(mk)};
+  });
+
+  // tendance : dernier mois révolu comparé à la moyenne des mois d'avant
+  const trend = new Map();
+  if(mks.length >= 2){
+    const [recent, ...older] = mks;
+    keep.concat(hasRest?['Autres catégories']:[]).forEach(cat=>{
+      const val = cat==='Autres catégories'
+        ? (segsFor(recent).find(s=>s.name===cat)?.value || 0)
+        : (perMonth.get(recent).get(cat)||0);
+      const prevs = older.map(mk=>cat==='Autres catégories'
+        ? (segsFor(mk).find(s=>s.name===cat)?.value || 0)
+        : (perMonth.get(mk).get(cat)||0));
+      const avg = prevs.reduce((a,b)=>a+b,0)/prevs.length;
+      if(avg > 0) trend.set(cat, Math.round((val-avg)/avg*100));
+    });
+  }
+
+  const grand = [...totals.values()].reduce((a,b)=>a+b,0);
+  const legend = keep.map(c=>({name:c, total:totals.get(c), color:catInfo(c).color}));
+  if(hasRest){
+    const rest = ranked.slice(TOP_CATS).reduce((s,[,v])=>s+v,0);
+    if(rest>0) legend.push({name:'Autres catégories', total:rest, color:'#5C6B62'});
+  }
+  return {monthTotals, legend, grand, trend, nMonths:mks.length};
+}
+
+function evolutionHTML(){
+  const mks = lastMonths(apercuPeriod);
+  const b = periodBreakdown(mks);
+  const btns = [1,3,6].map(n=>
+    `<button type="button" class="toggle-btn ${apercuPeriod===n?'active-inc':''}" data-period="${n}">${n} mois</button>`
+  ).join('');
+
+  if(b.grand===0){
+    return `<div class="toggle-group" style="margin-bottom:16px;">${btns}</div>
+      <div class="card"><div class="empty"><div class="big">Pas encore d’historique</div>
+      Aucune dépense sur ${apercuPeriod===1?'le mois précédent':`les ${apercuPeriod} mois précédents`}. Importez un relevé pour remplir cette vue.</div></div>`;
+  }
+
+  const maxMonth = Math.max(...b.monthTotals.map(m=>m.total)) || 1;
+  const moyenne = b.grand / b.nMonths;
+
+  const barres = b.monthTotals.map(m=>{
+    const largeur = Math.round(m.total/maxMonth*100);
+    const segs = m.total>0 ? m.segs.map(s=>
+      `<span style="width:${(s.value/m.total*100).toFixed(2)}%;background:${s.color};"
+             title="${escapeHTML(s.name)} — ${fmt(s.value)}"></span>`).join('') : '';
+    return `<div class="mrow">
+      <div class="mrow-top">
+        <span class="mrow-mois">${escapeHTML(monthLabel(m.mk))}</span>
+        <span class="mrow-tot">${fmt(m.total)}</span>
+      </div>
+      <div class="mrow-rail"><div class="mrow-stack" style="width:${Math.max(2,largeur)}%">${segs}</div></div>
+    </div>`;
+  }).join('');
+
+  const fleche = p => p>0 ? `<span style="color:var(--coral);">▲ ${p} %</span>`
+                    : p<0 ? `<span style="color:var(--mint);">▼ ${Math.abs(p)} %</span>`
+                    : `<span style="color:var(--ink-faint);">=</span>`;
+
+  const lignes = b.legend.map(c=>{
+    const pct = Math.round(c.total/b.grand*100);
+    const t = b.trend.get(c.name);
+    // « Autres catégories » est un regroupement d'affichage, pas une vraie catégorie :
+    // il n'y a rien à ouvrir ni à reclasser derrière
+    const cliquable = c.name!=='Autres catégories';
+    return `<div class="legend-row${cliquable?' drillable':''}" ${cliquable?`data-drill="${escapeHTML(c.name)}"`:''}>
+      <span class="chip" style="background:${c.color}"></span>
+      <span class="label">${escapeHTML(c.name)}</span>
+      ${t!==undefined ? `<span class="pct" style="font-size:11px;">${fleche(t)}</span>` : `<span class="pct">${pct} %</span>`}
+      <span class="amt" style="color:${c.color}">${fmt(c.total)}</span>
+      ${cliquable?'<span class="drill-arrow">›</span>':''}
+    </div>`;
+  }).join('');
+
+  return `
+    <div class="toggle-group" style="margin-bottom:16px;">${btns}</div>
+    <div class="card">
+      ${barres}
+      <div style="margin-top:4px;padding-top:14px;border-top:1px solid var(--line);display:flex;justify-content:space-between;font-size:12px;color:var(--ink-soft);">
+        <span>Moyenne mensuelle</span>
+        <span style="font-family:'JetBrains Mono',monospace;font-weight:700;color:var(--ink);">${fmt(moyenne)}</span>
+      </div>
+    </div>
+    <div class="card">
+      ${lignes}
+      ${b.nMonths>=2 ? `<p class="muted" style="font-size:11px;margin:12px 0 0;line-height:1.5;">
+        Les flèches comparent ${monthLabel(mks[0])} à la moyenne des ${b.nMonths-1} mois précédent${b.nMonths>2?'s':''}.</p>` : ''}
+    </div>`;
+}
+
+// ---------- DÉTAIL D'UNE CATÉGORIE (depuis l'Aperçu) ----------
+// Ouverte en plein écran par-dessus l'onglet courant : la liste peut être longue,
+// une modale serait vite illisible au doigt.
+let drill = null;   // {cat, period} ou null
+let drillQ = '';    // filtre libellé, sert aussi à cibler un reclassement en masse
+
+function openDrill(cat, period){
+  drill = {cat, period};
+  drillQ = '';
+  render();
+  window.scrollTo(0,0);
+}
+function closeDrill(){ drill = null; drillQ = ''; render(); window.scrollTo(0,0); }
+
+// Opérations de la catégorie sur la période, filtrées par la recherche
+function drillTx(){
+  const mks = new Set(lastMonths(drill.period));
+  const q = drillQ.trim().toLowerCase();
+  return state.transactions
+    .filter(t=>t.amount<0 && (t.category||'Non catégorisé')===drill.cat && mks.has(monthKey(t.date)))
+    .filter(t=>!q || (t.description||'').toLowerCase().includes(q))
+    .sort((a,b)=>b.date.localeCompare(a.date));
+}
+
+function reclasser(ids, target){
+  let n = 0;
+  ids.forEach(id=>{
+    const t = state.transactions.find(x=>x.id===id);
+    if(!t || t.category===target) return;
+    t.category = target;
+    t.autoCat = '';          // le classement devient manuel : plus d'explication « auto »
+    t.updatedAt = Date.now();
+    n++;
+  });
+  if(n) saveData();
+  return n;
+}
+
+function drillHTML(){
+  const list = drillTx();
+  const total = list.reduce((s,t)=>s+Math.abs(t.amount),0);
+  const info = catInfo(drill.cat);
+  const per = drill.period===1 ? 'le mois précédent' : `les ${drill.period} derniers mois`;
+
+  // regroupement par mois : on garde le repère temporel de l'Aperçu
+  const byMonth = new Map();
+  list.forEach(t=>{
+    const mk = monthKey(t.date);
+    if(!byMonth.has(mk)) byMonth.set(mk, []);
+    byMonth.get(mk).push(t);
+  });
+
+  // le menu ne réaffiche pas la catégorie courante — on vient de filtrer dessus,
+  // elle serait identique sur toutes les lignes. C'est une action, pas un état.
+  const catOpts = `<option value="">Reclasser…</option>` + state.categories
+    .filter(c=>c.name!==drill.cat)
+    .map(c=>`<option value="${escapeHTML(c.name)}">${escapeHTML(c.name)}</option>`).join('');
+
+  const groupes = [...byMonth.entries()].map(([mk, txs])=>{
+    const sous = txs.reduce((s,t)=>s+Math.abs(t.amount),0);
+    return `
+    <div class="drill-mois">
+      <span>${escapeHTML(monthLabel(mk))}</span>
+      <span>${fmt(sous)}</span>
+    </div>
+    ${txs.map(t=>`
+      <div class="drill-row">
+        <div class="drill-line">
+          <span class="drill-date">${t.date.split('-').reverse().slice(0,2).join('/')}</span>
+          <span class="drill-desc">${escapeHTML(t.description||'(sans libellé)')}</span>
+          <span class="drill-amt">${fmt(Math.abs(t.amount))}</span>
+        </div>
+        <select class="drill-cat" data-recat="${t.id}">${catOpts}</select>
+      </div>`).join('')}`;
+  }).join('');
+
+  return `
+    <button class="ghost" id="drill-back" style="width:auto;padding:0;margin:0 0 14px;text-align:left;">← Retour à l’aperçu</button>
+
+    <div class="card" style="border-left:3px solid ${info.color};">
+      <div class="mois-eyebrow" style="color:${info.color};">${escapeHTML(drill.cat)}</div>
+      <div class="mois-big" style="font-size:28px;color:var(--ink);">${fmt(total)}</div>
+      <div class="mois-sub">${list.length} opération${list.length>1?'s':''} sur ${per}${drillQ?` · filtre « ${escapeHTML(drillQ)} »`:''}</div>
+    </div>
+
+    <input type="text" id="drill-q" placeholder="Filtrer par libellé (ex. SUPER U)…" value="${escapeHTML(drillQ)}" style="margin-bottom:12px;">
+    ${list.length ? `<button class="secondary" id="drill-bulk" style="margin-bottom:16px;">
+      Reclasser ces ${list.length} opération${list.length>1?'s':''} d’un coup
+    </button>` : ''}
+
+    <div class="card" style="padding:6px 16px 14px;">
+      ${list.length ? groupes : `<div class="empty"><div class="big">Aucune opération</div>
+        ${drillQ ? 'Aucun libellé ne correspond à ce filtre.' : `Rien dans cette catégorie sur ${per}.`}</div>`}
+    </div>
+
+    <p class="muted" style="font-size:11.5px;line-height:1.6;margin:0 0 8px;">
+      Changez la catégorie d’une ligne avec le menu déroulant. Pour corriger une enseigne en bloc,
+      filtrez son libellé puis utilisez le bouton de reclassement groupé. Chaque correction sert aux imports suivants.
+    </p>`;
+}
+
+function attachDrillHandlers(){
+  const back = document.getElementById('drill-back');
+  if(back) back.onclick = closeDrill;
+
+  const q = document.getElementById('drill-q');
+  if(q) q.oninput = e=>{
+    drillQ = e.target.value;
+    render();
+    const again = document.getElementById('drill-q');
+    if(again){ again.focus(); again.setSelectionRange(again.value.length, again.value.length); }
+  };
+
+  document.querySelectorAll('[data-recat]').forEach(sel=>{
+    sel.onchange = ()=>{
+      if(!sel.value) return;   // « Reclasser… », aucune cible choisie
+      const n = reclasser([sel.dataset.recat], sel.value);
+      if(n) showToast(`Reclassée en « ${sel.value} »`, 'ok');
+      render();
+    };
+  });
+
+  const bulk = document.getElementById('drill-bulk');
+  if(bulk) bulk.onclick = async ()=>{
+    const list = drillTx();
+    if(!list.length) return;
+    const cible = await askCategory({
+      title:'Reclasser en masse',
+      message:`${list.length} opération(s) actuellement dans « ${drill.cat} »${drillQ?` et contenant « ${drillQ} »`:''} vont changer de catégorie.`,
+      exclude: drill.cat
+    });
+    if(!cible) return;
+    const n = reclasser(list.map(t=>t.id), cible);
+    showToast(`${n} opération(s) reclassée(s) en « ${cible} »`, 'ok');
+    render();
+  };
+}
+
 function apercuHTML(){
   const mtx = thisMonthTx();
   const expByCat = {};
@@ -921,6 +1407,8 @@ function apercuHTML(){
     ${toIdBanner}
     <h2 class="section-title">Répartition du mois</h2>
     <div class="card">${catHTML}</div>
+    <h2 class="section-title">Évolution par catégorie</h2>
+    ${evolutionHTML()}
     <h2 class="section-title">Dernières opérations</h2>
     <div class="card">${recentHTML}</div>
     <h2 class="section-title">Catégories</h2>
@@ -1424,11 +1912,14 @@ function setRecMark(id, mk, val){
   if(val) r.marks[mk] = val; else delete r.marks[mk];
   r.updatedAt = Date.now();
 }
-function computeRecurringStatuses(){
-  const mk = todayISO().slice(0,7);
-  const mtx = thisMonthTx();
+function computeRecurringStatuses(monthK){
+  const mk = monthK || todayISO().slice(0,7);
+  const curMk = todayISO().slice(0,7);
+  const mtx = state.transactions.filter(t=>monthKey(t.date)===mk);
   const usedTx = new Set();
-  const today = new Date().getDate();
+  // sur un mois révolu, tout ce qui devait tomber est censé être tombé ; sur un
+  // mois à venir, rien n'est encore attendu
+  const today = mk===curMk ? new Date().getDate() : (mk<curMk ? 32 : 0);
 
   const lines = state.recurring.map(r=>({
     ...r,
@@ -1462,6 +1953,58 @@ function computeRecurringStatuses(){
   });
   lines.forEach(l=>{ if(!l.st) l.st = l.expDay <= today ? 'attendu' : 'avenir'; });
   return lines;
+}
+
+// ---------- ANALYSE D'UN MOIS ----------
+// Sépare ce qui est subi (charges fixes déclarées) de ce qui est arbitrable
+// (le reste), et isole ce qui n'est pas encore tombé sur le mois en cours.
+function monthAnalysis(mk){
+  const curMk = todayISO().slice(0,7);
+  const isCurrent = mk === curMk;
+  const isFuture  = mk > curMk;
+  const tx = state.transactions.filter(t=>monthKey(t.date)===mk);
+
+  const depenses = tx.filter(t=>t.amount<0 && !isSavings(t)).reduce((s,t)=>s+Math.abs(t.amount),0);
+  const revenus  = tx.filter(t=>t.amount>0 && !isSavings(t)).reduce((s,t)=>s+t.amount,0);
+  const epargne  = tx.filter(isSavings).reduce((s,t)=>s-t.amount,0); // >0 = placé
+
+  const recLines = computeRecurringStatuses(mk);
+  const recExp = recLines.filter(r=>r.type==='expense' && r.category!==SAVINGS_CAT);
+  const passe = r => r.st==='fait' || r.st==='probable';
+
+  // pour une charge retrouvée, le montant réellement débité prime sur le montant déclaré
+  const fixePasse = recExp.filter(passe)
+    .reduce((s,r)=>s + Math.abs(r.match ? r.match.amount : r.amount), 0);
+  const fixeAVenir = recExp.filter(r=>!passe(r))
+    .reduce((s,r)=>s + Math.abs(r.amount), 0);
+
+  // frais ponctuels prévus (onglet Prévisionnel) qui tombent sur ce mois
+  const upMonth = state.upcoming.filter(u=>monthKey(u.date)===mk);
+  const upAVenir = upMonth.filter(u=>u.date>=todayISO())
+    .reduce((s,u)=>s+Math.abs(u.amount),0);
+
+  const variable = Math.max(0, depenses - fixePasse);
+  const resteAPasser = (isCurrent||isFuture) ? fixeAVenir + upAVenir : 0;
+
+  return {
+    mk, isCurrent, isFuture, isPast: mk < curMk,
+    tx, depenses, revenus, epargne,
+    recLines, recExp, fixePasse, fixeAVenir, upMonth, upAVenir,
+    variable, resteAPasser,
+    nFaites: recExp.filter(passe).length,
+    nTotal: recExp.length
+  };
+}
+
+// Dépenses du mois par catégorie, les plus lourdes d'abord
+function monthByCategory(tx){
+  const map = new Map();
+  tx.filter(t=>t.amount<0 && !isSavings(t)).forEach(t=>{
+    const k = t.category || 'Non catégorisé';
+    map.set(k, (map.get(k)||0) + Math.abs(t.amount));
+  });
+  return [...map.entries()].map(([name,total])=>({name,total,color:catInfo(name).color}))
+    .sort((a,b)=>b.total-a.total);
 }
 
 function previsionData(){
@@ -2147,9 +2690,192 @@ function attachPrevisionnelHandlers(){
 }
 
 // ---------- HISTORIQUE ----------
+// ---------- LE MOIS (onglet Historique) ----------
+function prevMonthKey(mk){
+  const [y,m] = mk.split('-').map(Number);
+  const d = new Date(y, m-2, 1);
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+}
+
+// La silhouette du mois : une barre par jour de prélèvement, hauteur
+// proportionnelle au montant. Plein mint = déjà passé, dégradé corail = à tomber.
+// On lit d'un coup d'œil quand tombent les gros débits et ce qui reste devant soi.
+function ligneMoisHTML(a){
+  const nDays = daysOfMonth(a.mk);
+  const pos = day => (day-1)/(nDays-1)*100;
+  const at = pct => `calc(9px + (100% - 18px) * ${(pct/100).toFixed(4)})`;
+
+  const byDay = new Map();
+  a.recExp.forEach(r=>{
+    if(!byDay.has(r.expDay)) byDay.set(r.expDay, []);
+    byDay.get(r.expDay).push(r);
+  });
+  if(!byDay.size) return '';
+
+  const jours = [...byDay.entries()].map(([day, rs])=>({
+    day, rs,
+    total: rs.reduce((s,r)=>s+Math.abs(r.match ? r.match.amount : r.amount),0),
+    done: rs.filter(r=>r.st==='fait'||r.st==='probable').length
+  }));
+  const maxTot = Math.max(...jours.map(j=>j.total));
+  const H = 62; // hauteur max d'une barre
+  // échelle en racine carrée : à l'échelle linéaire une mensualité de prêt écrase
+  // tout le reste et les petites charges deviennent invisibles. L'ordre des
+  // hauteurs reste fidèle, seuls les écarts sont adoucis.
+  const hauteur = v => Math.max(6, Math.round(Math.sqrt(v/maxTot)*H));
+
+  const todayD = a.isCurrent ? new Date().getDate() : null;
+  const fillPct = a.isPast ? 100 : (a.isFuture ? 0 : pos(todayD));
+
+  const bars = jours.map(j=>{
+    const cls = j.done===j.rs.length ? '' : (j.done>0 ? 'maybe' : 'todo');
+    const h = hauteur(j.total);
+    const noms = j.rs.map(r=>r.label).join(', ');
+    // seule la charge la plus lourde porte son montant : au-delà ça devient illisible
+    const label = j.total >= maxTot*0.9
+      ? `<span class="bar-amt">${Math.round(j.total)} €</span>` : '';
+    return `<span class="bar ${cls}" style="left:${at(pos(j.day))};height:${h}px"
+      data-info="${escapeHTML(noms)} — ${fmt(j.total)} (le ${j.day})">${label}</span>`;
+  }).join('');
+
+  const marks = [...new Set([1, Math.round(nDays/2), nDays])];
+  const labels = marks.map(d=>`<span class="ligne-day" style="left:${at(pos(d))}">${d}</span>`).join('');
+
+  return `
+    <div class="ligne-mois">
+      <div class="ligne-rail"></div>
+      <div class="ligne-fill" style="width:${at(fillPct)}"></div>
+      ${bars}
+      ${todayD ? `<div class="ligne-today" style="left:${at(pos(todayD))}"><span>auj.</span></div>` : ''}
+      ${labels}
+    </div>
+    <div class="ligne-legend">
+      <span><i style="background:var(--mint)"></i>prélevée</span>
+      <span><i style="background:var(--coral)"></i>à tomber</span>
+    </div>`;
+}
+
+function chargeRowHTML(r, isPast){
+  const done = r.st==='fait' || r.st==='probable';
+  const montant = Math.abs(r.match ? r.match.amount : r.amount);
+  const etat = r.st==='fait' ? ['prélevée','var(--mint)']
+    : r.st==='probable' ? ['probablement prélevée','var(--sky)']
+    : r.st==='attendu' ? (isPast ? ['non retrouvée sur le relevé','var(--ink-faint)'] : ['attendue — pas encore vue','var(--gold)'])
+    : ['à venir','var(--ink-faint)'];
+  return `<div class="chg ${done?'done':'todo'}">
+    <div class="chg-day">${r.expDay}</div>
+    <div class="chg-body">
+      <div class="chg-label">${escapeHTML(r.label)}</div>
+      <div class="chg-state" style="color:${etat[1]}">${etat[0]}</div>
+    </div>
+    <div class="chg-amt" style="color:${done?'var(--ink-faint)':'var(--coral)'}">${fmt(montant)}</div>
+  </div>`;
+}
+
+function moisPanelHTML(mk){
+  const a = monthAnalysis(mk);
+  if(!a.tx.length && !a.recExp.length){
+    return `<div class="card"><div class="empty"><div class="big">${monthLabel(mk)}</div>Aucune opération sur ce mois.</div></div>`;
+  }
+
+  const fixe = a.fixePasse;
+  const varia = a.variable;
+  const tot = fixe + varia;
+  const pFixe = tot>0 ? Math.round(fixe/tot*100) : 0;
+
+  // le chiffre de tête change de nature selon qu'on regarde le mois en cours
+  // (ce qui reste à tomber) ou un mois révolu (ce qu'il a coûté)
+  const head = (a.isCurrent||a.isFuture)
+    ? {eyebrow:'Reste à passer', val:a.resteAPasser, color:a.resteAPasser>0?'var(--coral)':'var(--mint)'}
+    : {eyebrow:'Dépensé ce mois-là', val:a.depenses, color:'var(--ink)'};
+  const h = fmtSplit(head.val);
+
+  const nReste = a.nTotal - a.nFaites;
+  let sub;
+  if(a.isCurrent||a.isFuture){
+    sub = nReste>0
+      ? `Il reste ${nReste} charge${nReste>1?'s':''} fixe${nReste>1?'s':''} à prélever sur ${a.nTotal}`
+      : (a.nTotal ? 'Toutes vos charges fixes sont passées.' : 'Aucune charge fixe déclarée.');
+    if(a.upAVenir>0) sub += ` · ${fmt(a.upAVenir)} de frais prévus`;
+  } else {
+    const prev = monthAnalysis(prevMonthKey(mk));
+    if(prev.depenses>0){
+      const delta = a.depenses - prev.depenses;
+      const pct = Math.round(Math.abs(delta)/prev.depenses*100);
+      sub = delta>=0
+        ? `${pct} % de plus qu'en ${monthLabel(prev.mk)}`
+        : `${pct} % de moins qu'en ${monthLabel(prev.mk)}`;
+    } else {
+      sub = `${a.tx.length} opération${a.tx.length>1?'s':''}`;
+    }
+  }
+
+  const cats = monthByCategory(a.tx).slice(0,6);
+  const maxCat = cats.length ? cats[0].total : 1;
+
+  const charges = [...a.recExp].sort((x,y)=>{
+    const dx = (x.st==='fait'||x.st==='probable') ? 1 : 0;
+    const dy = (y.st==='fait'||y.st==='probable') ? 1 : 0;
+    return dx-dy || x.expDay-y.expDay;
+  });
+
+  return `
+    <div class="card" style="padding:20px 18px 18px;">
+      <div class="mois-head">
+        <span class="mois-eyebrow">${escapeHTML(monthLabel(mk))}</span>
+        <span class="mois-eyebrow" style="color:var(--ink-soft);">${head.eyebrow}</span>
+      </div>
+      <div class="mois-big" style="color:${head.color};">${h.sign}${h.ent}<span class="cents">,${h.cents} €</span></div>
+      <div class="mois-sub">${sub}</div>
+      ${ligneMoisHTML(a)}
+    </div>
+
+    ${tot>0 ? `
+    <div class="card">
+      <div style="display:flex;justify-content:space-between;align-items:baseline;">
+        <span class="mois-eyebrow">Subi / arbitrable</span>
+        <span style="font-family:'JetBrains Mono',monospace;font-size:11.5px;color:var(--ink-faint);">${pFixe} % de fixe</span>
+      </div>
+      <div class="jauge">
+        <span style="width:${pFixe}%;background:var(--lilac);"></span>
+        <span style="width:${100-pFixe}%;background:var(--mint);"></span>
+      </div>
+      <div style="display:flex;justify-content:space-between;font-size:12px;">
+        <span style="color:var(--lilac);">Charges fixes <strong style="font-family:'JetBrains Mono',monospace;">${fmt(fixe)}</strong></span>
+        <span style="color:var(--mint);"><strong style="font-family:'JetBrains Mono',monospace;">${fmt(varia)}</strong> au quotidien</span>
+      </div>
+      ${a.revenus>0 ? `<div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--line);font-size:12px;color:var(--ink-soft);">
+        Revenus ${fmt(a.revenus)} · reste <strong style="color:${a.revenus-tot>=0?'var(--mint)':'var(--coral)'};font-family:'JetBrains Mono',monospace;">${fmt(a.revenus-tot)}</strong>${a.epargne>0?` · ${fmt(a.epargne)} mis de côté`:''}
+      </div>` : ''}
+    </div>` : ''}
+
+    ${charges.length ? `
+    <h2 class="section-title">Charges fixes du mois</h2>
+    <div class="card" style="padding:6px 18px;">
+      ${charges.map(r=>chargeRowHTML(r, a.isPast)).join('')}
+    </div>` : ''}
+
+    ${cats.length ? `
+    <h2 class="section-title">Où part l'argent</h2>
+    <div class="card">
+      ${cats.map(c=>`
+        <div class="catbar">
+          <div class="catbar-top">
+            <span class="catbar-name">${escapeHTML(c.name)}</span>
+            <span class="catbar-val">${fmt(c.total)}</span>
+          </div>
+          <div class="catbar-rail"><div class="catbar-fill" style="width:${Math.max(3,Math.round(c.total/maxCat*100))}%;background:${c.color};"></div></div>
+        </div>`).join('')}
+    </div>` : ''}
+  `;
+}
+
+let histView = 'mois'; // 'mois' = synthèse mensuelle, 'liste' = opérations détaillées
 function historiqueHTML(){
   const months = Array.from(new Set(state.transactions.map(t=>monthKey(t.date)))).filter(Boolean).sort().reverse();
   const f = state.historyFilters;
+  // le panneau mensuel a toujours besoin d'un mois : à défaut de filtre, le mois courant
+  const panelMk = f.month!=='all' ? f.month : todayISO().slice(0,7);
   let list = [...state.transactions];
   if(f.month!=='all') list = list.filter(t=>monthKey(t.date)===f.month);
   if(f.cat!=='all') list = list.filter(t=>t.category===f.cat);
@@ -2169,6 +2895,13 @@ function historiqueHTML(){
         ${state.categories.map(c=>`<option value="${escapeHTML(c.name)}" ${f.cat===c.name?'selected':''}>${escapeHTML(c.name)}</option>`).join('')}
       </select>
     </div>
+
+    <div class="toggle-group" style="margin-bottom:16px;">
+      <button type="button" class="toggle-btn ${histView==='mois'?'active-inc':''}" data-hview="mois">Le mois</button>
+      <button type="button" class="toggle-btn ${histView==='liste'?'active-exp':''}" data-hview="liste">Opérations</button>
+    </div>
+
+    ${histView==='mois' ? moisPanelHTML(panelMk) : `
     <input type="text" id="hf-q" placeholder="Rechercher un libellé…" value="${escapeHTML(f.q)}" style="margin-bottom:16px;">
     <div class="card">
       <div style="display:flex;justify-content:space-between;margin-bottom:10px;align-items:center;">
@@ -2176,7 +2909,8 @@ function historiqueHTML(){
         <span style="font-family:'JetBrains Mono',monospace;font-weight:700;color:${totalShown<0?'var(--coral)':'var(--mint)'};">${fmt(totalShown)}</span>
       </div>
       ${list.length ? list.map(rowHTML).join('') : '<div class="empty"><div class="big">Aucun résultat</div>Aucune opération ne correspond à ces filtres.</div>'}
-    </div>
+    </div>`}
+
     <button class="secondary" id="btn-export" style="margin-bottom:8px;">⇩ Exporter tout en Excel (lecture)</button>
     <button class="secondary" id="btn-backup-json" style="margin-bottom:8px;">⇩ Sauvegarde complète (JSON)</button>
     <input type="file" id="restore-json" accept=".json" style="display:none;">
@@ -2188,8 +2922,10 @@ function historiqueHTML(){
 // ---------- HANDLERS ----------
 function attachHandlers(){
   document.querySelectorAll('nav.bottom button').forEach(b=>{
-    b.onclick = ()=>{ state.tab = b.dataset.tab; render(); };
+    // changer d'onglet referme la vue détaillée, sinon elle resterait affichée par-dessus
+    b.onclick = ()=>{ drill = null; state.tab = b.dataset.tab; render(); };
   });
+  if(drill){ attachDrillHandlers(); return; }
   const balEl = document.getElementById('balance-adjust');
   if(balEl) balEl.onclick = async ()=>{
     const cur = currentBalance();
@@ -2214,6 +2950,16 @@ function attachHandlers(){
   if(state.tab==='apercu'){
     attachRowHandlers();
     attachCategoriesHandlers();
+    document.querySelectorAll('[data-period]').forEach(b=>{
+      b.onclick = ()=>{ apercuPeriod = parseInt(b.dataset.period,10); render(); };
+    });
+    document.querySelectorAll('[data-drill]').forEach(el=>{
+      el.onclick = ()=>openDrill(el.dataset.drill, apercuPeriod);
+    });
+    // l'attribut title est inopérant au doigt : un appui sur un segment l'annonce
+    document.querySelectorAll('.mrow-stack span').forEach(s=>{
+      s.onclick = ()=>showToast(s.getAttribute('title')||'', 'ok');
+    });
     const banner = document.getElementById('banner-to-id');
     if(banner) banner.onclick = ()=>{
       state.tab='historique';
@@ -2702,7 +3448,23 @@ function attachHistoriqueHandlers(){
   const f = state.historyFilters;
   document.getElementById('hf-month').onchange = e=>{ f.month = e.target.value; render(); };
   document.getElementById('hf-cat').onchange = e=>{ f.cat = e.target.value; render(); };
-  document.getElementById('hf-q').oninput = e=>{ f.q = e.target.value; render(); };
+  document.querySelectorAll('[data-hview]').forEach(b=>{
+    b.onclick = ()=>{ histView = b.dataset.hview; render(); };
+  });
+  // le champ de recherche n'existe qu'en vue « Opérations » ; le re-render à chaque
+  // frappe reprenait le focus, on le rend au champ avec le curseur en fin de saisie
+  const q = document.getElementById('hf-q');
+  if(q) q.oninput = e=>{
+    f.q = e.target.value;
+    render();
+    const again = document.getElementById('hf-q');
+    if(again){ again.focus(); again.setSelectionRange(again.value.length, again.value.length); }
+  };
+  // sur mobile l'attribut title ne s'affiche pas : un appui sur une barre du mois
+  // annonce les charges de ce jour
+  document.querySelectorAll('.ligne-mois .bar').forEach(p=>{
+    p.onclick = ()=>showToast(p.dataset.info||'', 'ok');
+  });
   const exp = document.getElementById('btn-export');
   if(exp) exp.onclick = exportExcel;
   const bkp = document.getElementById('btn-backup-json');
