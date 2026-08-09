@@ -402,34 +402,40 @@
 (function(){
 
 const DEFAULT_CATEGORIES = [
-  {name:'Courses', color:'#5EE2A0'},
-  {name:'Restaurants & sorties', color:'#FFA94D'},
-  {name:'Vêtements', color:'#E883A8'},
-  {name:'Loisirs', color:'#E8B85C'},
-  {name:'Vacances', color:'#45C4E0'},
-  {name:'Transport', color:'#7FD4D4'},
-  {name:'Logement', color:'#B08FE0'},
-  {name:'Énergie & factures', color:'#F2E066'},
-  {name:'Assurances', color:'#8FA8FF'},
-  {name:'Prêt immobilier', color:'#D4A5FF'},
-  {name:'Prêt / Crédit', color:'#F0A868'},
-  {name:'Impôts & taxes', color:'#C97BD4'},
-  {name:'Santé', color:'#FF7E67'},
-  {name:'Abonnements', color:'#9AA5E8'},
-  {name:'Enfants', color:'#C7B08A'},
-  {name:'Cadeaux', color:'#E8738F'},
-  {name:'Frais pro', color:'#6FB4E8'},
-  {name:'Salaire / Revenus', color:'#3F8F5F'},
-  {name:'Épargne', color:'#8FE3C8'},
+  {name:'Alimentation (courses)', color:'#5EE2A0'},
+  {name:'Boulangerie / Café / Snacking quotidien', color:'#F2C14E'},
+  {name:'Restaurants / Bars / Sorties', color:'#FFA94D'},
+  {name:'Recharge véhicule électrique / Carburant', color:'#7FD4D4'},
+  {name:'Transport (train/bus/parking)', color:'#6FB4E8'},
+  {name:'Habillement / Beauté', color:'#E883A8'},
+  {name:'Sport / Loisirs / Abonnements', color:'#E8B85C'},
+  {name:'Télécom / Abonnements num.', color:'#9AA5E8'},
+  {name:'Logement / Charges', color:'#B08FE0'},
+  {name:'Bricolage / Maison', color:'#C9A66B'},
+  {name:'Assurances / Mutuelle', color:'#8FA8FF'},
+  {name:'Prêts / Crédits', color:'#F0A868'},
+  {name:'Impôts / Taxes locales', color:'#C97BD4'},
+  {name:'Santé / Bien-être', color:'#FF7E67'},
+  {name:'Vacances / Ski', color:'#45C4E0'},
+  {name:'Enfants / Ecole / Activités', color:'#C7B08A'},
+  {name:'Shopping en ligne / Divers', color:'#D4A5FF'},
+  {name:'Presse / Librairie', color:'#74A69A'},
+  {name:'Frais postaux', color:'#B5C99A'},
   {name:'Frais bancaires', color:'#A0A8B8'},
-  {name:'Autres', color:'#8FA096'},
+  {name:'Retraits espèces', color:'#9E9E9E'},
+  {name:'Chèques émis', color:'#7B8794'},
+  {name:'Virements émis (tiers)', color:'#E8738F'},
+  {name:'Virements internes / Lydia (épargne interne)', color:'#8FE3C8'},
+  {name:'Virements reçus / Revenus', color:'#3F8F5F'},
+  {name:'Non catégorisé', color:'#8FA096'},
   {name:'À catégoriser', color:'#5C6B62'}
 ];
 
-// L'épargne n'est pas une dépense : un virement vers un livret sort du compte
-// courant mais reste votre argent. Il doit donc peser sur le solde, jamais sur
-// les statistiques de dépenses ni sur l'estimation du train de vie.
-const SAVINGS_CAT = 'Épargne';
+// L'épargne n'est pas une dépense : un virement vers un livret (ou vers les
+// enveloppes Lydia) sort du compte courant mais reste votre argent. Il doit
+// donc peser sur le solde, jamais sur les statistiques de dépenses ni sur
+// l'estimation du train de vie.
+const SAVINGS_CAT = 'Virements internes / Lydia (épargne interne)';
 const isSavings = t => t.category === SAVINGS_CAT;
 
 const SCHEMA_VERSION = 2;
@@ -459,7 +465,7 @@ let state = {
 };
 
 function catInfo(name){
-  return state.categories.find(c=>c.name===name) || {name:name||'Autres', color:'#8FA096'};
+  return state.categories.find(c=>c.name===name) || {name:name||'Non catégorisé', color:'#8FA096'};
 }
 function fmt(n){
   const s = Math.abs(n).toLocaleString('fr-FR',{minimumFractionDigits:2,maximumFractionDigits:2});
@@ -498,9 +504,9 @@ function mergeCategories(saved){
   const tomb = catTombstones();
   const savedNames = new Set(saved.map(c=>c.name));
   state.categories = [
-    ...saved.filter(c=>c.name!=='Autres' && c.name!=='À catégoriser'),
-    ...DEFAULT_CATEGORIES.filter(c=>!savedNames.has(c.name) && !tomb.has(c.name) && c.name!=='Autres' && c.name!=='À catégoriser'),
-    ...DEFAULT_CATEGORIES.filter(c=>c.name==='Autres' || c.name==='À catégoriser')
+    ...saved.filter(c=>c.name!=='Non catégorisé' && c.name!=='À catégoriser'),
+    ...DEFAULT_CATEGORIES.filter(c=>!savedNames.has(c.name) && !tomb.has(c.name) && c.name!=='Non catégorisé' && c.name!=='À catégoriser'),
+    ...DEFAULT_CATEGORIES.filter(c=>c.name==='Non catégorisé' || c.name==='À catégoriser')
   ];
 }
 
@@ -536,11 +542,11 @@ function mergeRemote(remote){
     if(!r || (c.updatedAt||0) >= (r.updatedAt||0)) byName.set(c.name, c);
   });
   const cats = Array.from(byName.values()).filter(c=>!cTomb.has(c.name));
-  if(!cats.some(c=>c.name==='Autres')) cats.push({name:'Autres', color:'#8FA096'});
+  if(!cats.some(c=>c.name==='Non catégorisé')) cats.push({name:'Non catégorisé', color:'#8FA096'});
   if(!cats.some(c=>c.name==='À catégoriser')) cats.push({name:'À catégoriser', color:'#5C6B62'});
   state.categories = [
-    ...cats.filter(c=>c.name!=='Autres' && c.name!=='À catégoriser'),
-    ...cats.filter(c=>c.name==='Autres' || c.name==='À catégoriser')
+    ...cats.filter(c=>c.name!=='Non catégorisé' && c.name!=='À catégoriser'),
+    ...cats.filter(c=>c.name==='Non catégorisé' || c.name==='À catégoriser')
   ];
   const ra = remote.balanceAnchor;
   const la = state.balanceAnchor || {amount:0, at:0};
@@ -558,7 +564,7 @@ function normalizeData(raw){
   const d = {
     transactions: arr(raw.transactions)
       .filter(t=>t && t.id && typeof t.date === 'string')
-      .map(t=>({...t, amount:num(t.amount), category:str(t.category)||'Autres', details:arr(t.details)})),
+      .map(t=>({...t, amount:num(t.amount), category:str(t.category)||'Non catégorisé', details:arr(t.details)})),
     categories: arr(raw.categories).filter(c=>c && typeof c.name === 'string' && c.name.trim()),
     recurring: arr(raw.recurring).filter(r=>r && r.id)
       .map(r=>({...r, amount:num(r.amount), marks:(r.marks && typeof r.marks==='object') ? r.marks : {}})),
@@ -923,7 +929,8 @@ function apercuHTML(){
 // ---------- GESTION DES CATÉGORIES ----------
 let catMgrOpen = false;
 let newCatForm = {name:'', color:'#45C4E0'};
-const PROTECTED_CATS = ['Autres','À catégoriser','Épargne']; // structurelles : utilisées par le code
+const PROTECTED_CATS = ['Non catégorisé','À catégoriser','Virements internes / Lydia (épargne interne)',
+  'Retraits espèces','Chèques émis','Virements émis (tiers)','Virements reçus / Revenus']; // structurelles : utilisées par le code
 
 function categoriesManagerHTML(){
   const usage = {};
@@ -1010,7 +1017,7 @@ function rowHTML(t){
 // ---------- AJOUTER ----------
 let addFormState = null;
 function freshAddState(){
-  return { id:null, type:'expense', date:todayISO(), amount:'', category:'Courses', description:'', details:[] };
+  return { id:null, type:'expense', date:todayISO(), amount:'', category:'Alimentation (courses)', description:'', details:[] };
 }
 function ajouterHTML(){
   if(!addFormState) addFormState = freshAddState();
@@ -1110,25 +1117,28 @@ function opKind(raw){
 // Dictionnaire d'enseignes. Motifs déjà normalisés (majuscules, sans accents).
 // Les plus longs sont testés en premier : « AMAZON PRIME » avant « AMAZON ».
 const MERCHANT_DICT = [
-['Courses','CARREFOUR|LECLERC|INTERMARCHE|SUPER U|HYPER U|U EXPRESS|MONOPRIX|FRANPRIX|LIDL|ALDI|AUCHAN|CORA|NETTO|COLRUYT|GRAND FRAIS|BIOCOOP|NATURALIA|LA VIE CLAIRE|PICARD|THIRIET|G20|SPAR|VIVAL|PROXI|CASINO|GEANT|MARKET|SUPERMARCHE|HYPERMARCHE|SUPERETTE|EPICERIE|DRIVE|CHRONODRIVE|BOULANGERIE|PATISSERIE|BOUCHERIE|CHARCUTERIE|POISSONNERIE|FROMAGERIE|PRIMEUR|MARCHE COUVERT|GRAND MARCHE'],
-['Restaurants & sorties','CAFE|RESTAURANT|RESTO|BRASSERIE|PIZZERIA|PIZZA HUT|DOMINO S PIZZA|PIZZA|MCDONALD|MC DONALD|MCDO|BURGER KING|QUICK|KFC|SUBWAY|O TACOS|TACOS|KEBAB|SUSHI|WOK|CREPERIE|BISTROT|BISTRO|TAVERNE|BRUNCH|UBER EATS|DELIVEROO|JUST EAT|FRICHTI|STARBUCKS|COLUMBUS CAFE|BUFFALO GRILL|HIPPOPOTAMUS|COURTEPAILLE|DEL ARTE|LEON DE BRUXELLES|BIG FERNAND|FIVE GUYS|FLUNCH|LA MIE CALINE|BRIOCHE DOREE|GLACIER|SALON DE THE|BAR TABAC'],
-['Transport','STATION SERVICE|TOTAL ACCESS|TOTAL ENERGIES STATION|ESSO|SHELL|AVIA|ELAN|CARBURANT|GAZOLE|SP95|SP98|PEAGE|AUTOROUTE|VINCI AUTOROUTES|SANEF|APRR|COFIROUTE|ESCOTA|PARKING|INDIGO PARK|EFFIA|SAEMES|ONEPARK|ZENPARK|SNCF|OUIGO|TRAINLINE|BLABLACAR|FLIXBUS|OUIBUS|RATP|NAVIGO|UBER|BOLT|FREENOW|TAXI|NORAUTO|FEU VERT|MIDAS|SPEEDY|EUROMASTER|ROADY|CARGLASS|CONTROLE TECHNIQUE|DEKRA|AUTOVISION|SECURITEST|GARAGE|EUROPCAR|HERTZ|SIXT|RENT A CAR|VELIB|TROTTINETTE'],
-['Énergie & factures','EDF|ENGIE|TOTALENERGIES|TOTAL ENERGIES|ENI GAS|VATTENFALL|EKWATEUR|MINT ENERGIE|OHM ENERGIE|PLANETE OUI|ILEK|GRDF|ENEDIS|VEOLIA|SUEZ|SAUR|EAUX|SERVICE EAUX|SYNDICAT EAUX|PRIMAGAZ|ANTARGAZ|BUTAGAZ|FIOUL|GAZ NATUREL'],
-['Abonnements','NETFLIX|SPOTIFY|DEEZER|DISNEY|AMAZON PRIME|PRIME VIDEO|CANAL PLUS|CANALPLUS|OCS|APPLE COM BILL|APPLE COM|ITUNES|GOOGLE STORAGE|GOOGLE ONE|YOUTUBE|MICROSOFT|OFFICE 365|ADOBE|DROPBOX|ICLOUD|PLAYSTATION|XBOX|NINTENDO|STEAM|AUDIBLE|KINDLE|MOLOTOV|PARAMOUNT|CRUNCHYROLL|ORANGE|SFR|BOUYGUES|FREE MOBILE|FREE TELECOM|SOSH|RED BY SFR|B AND YOU|PRIXTEL|NRJ MOBILE|LA POSTE MOBILE|CORIOLIS|LEBARA|ABONNEMENT'],
-['Logement','LOYER|SYNDIC|COPROPRIETE|FONCIA|NEXITY|CITYA|ORPI|CENTURY 21|LAFORET|SQUARE HABITAT|IKEA|LEROY MERLIN|CASTORAMA|BRICO DEPOT|BRICOMARCHE|MR BRICOLAGE|WELDOM|POINT P|GEDIMAT|BRICORAMA|CONFORAMA|MAISONS DU MONDE|ALINEA|BUT |DARTY|BOULANGER|ELECTRO DEPOT|GIFI|CENTRAKOR|FOIR FOUILLE|PLOMBIER|ELECTRICIEN|CHAUFFAGISTE|SERRURIER'],
-['Assurances','MAIF|MACIF|MATMUT|MAAF|GMF|AXA|ALLIANZ|GENERALI|GROUPAMA|MMA|AG2R|HARMONIE MUTUELLE|MGEN|MALAKOFF|APRIL|LUKO|DIRECT ASSURANCE|L OLIVIER|EUROFIL|SWISSLIFE|ABEILLE ASSURANCES|PACIFICA|ASSURANCE|ASSURANCES|MUTUELLE|PREVOYANCE'],
-['Santé','PHARMACIE|PHARMACIEN|DOCTEUR|MEDECIN|CABINET MEDICAL|LABORATOIRE|BIOGROUP|CERBALLIANCE|SYNLAB|DENTISTE|ORTHODONT|OPHTALMO|OPTICIEN|OPTIC|KRYS|AFFLELOU|GENERALE D OPTIQUE|GRAND OPTICAL|AUDIKA|AMPLIFON|KINE|KINESITHERAPEUTE|OSTEOPATHE|PODOLOGUE|DERMATO|RADIOLOGIE|IMAGERIE|CLINIQUE|HOPITAL|CENTRE HOSPITALIER|SAGE FEMME|INFIRMIER|PSYCHOLOGUE|ORTHOPHONISTE'],
-['Vêtements','ZARA|H M|KIABI|PRIMARK|UNIQLO|CELIO|JULES|BONOBO|JENNYFER|PIMKIE|CAMAIEU|PROMOD|MANGO|BERSHKA|PULL AND BEAR|STRADIVARIUS|COURIR|FOOT LOCKER|JD SPORTS|LA HALLE|GEMO|BESSON|ERAM|ANDRE CHAUSSURES|MINELLI|SARENZA|ZALANDO|VINTED|SHEIN|ASOS|VEEPEE|SHOWROOMPRIVE|GALERIES LAFAYETTE|PRINTEMPS|KOOKAI|NAF NAF|ETAM|UNDIZ|CHAUSSURES'],
-['Loisirs','FNAC|CULTURA|CINEMA|CGR|UGC|PATHE|GAUMONT|KINEPOLIS|BASIC FIT|FITNESS PARK|KEEP COOL|ORANGE BLEUE|NEONESS|SALLE DE SPORT|PISCINE|BOWLING|LASER GAME|ESCAPE GAME|KARTING|ACCROBRANCHE|MUSEE|THEATRE|CONCERT|TICKETMASTER|BILLETREDUC|SHOTGUN|DECATHLON|INTERSPORT|GO SPORT|JARDILAND|TRUFFAUT|GAMM VERT|BOTANIC|MICROMANIA|LIBRAIRIE|MOMOX|COIFFEUR|INSTITUT DE BEAUTE|ONGLERIE'],
-['Vacances','BOOKING|AIRBNB|ABRITEL|HOTEL|IBIS|NOVOTEL|MERCURE|CAMPANILE|B B HOTEL|PREMIERE CLASSE|KYRIAD|LOGIS DE FRANCE|GITE|CAMPING CAR|CAMPING|HUTTOPIA|FLOWER CAMPINGS|CAPFUN|SIBLU|YELLOH|CENTER PARCS|BELAMBRA|VVF|PIERRE ET VACANCES|CLUB MED|TUI|FRAM|PROMOVACANCES|LASTMINUTE|EXPEDIA|OPODO|EDREAMS|AIR FRANCE|EASYJET|RYANAIR|TRANSAVIA|VUELING|VOLOTEA|BRITTANY FERRIES|FERRY|PITCHUP|OFFICE DE TOURISME'],
-['Enfants','CRECHE|ASSISTANTE MATERNELLE|ASS MAT|GARDERIE|PERISCOLAIRE|CANTINE|CENTRE DE LOISIRS|ALSH|PAJEMPLOI|ECOLE|COLLEGE|LYCEE|ORCHESTRA|VERTBAUDET|PETIT BATEAU|OKAIDI|SERGENT MAJOR|JACADI|AUBERT|AUTOUR DE BEBE|OXYBUL|KING JOUET|LA GRANDE RECRE|JOUE CLUB|PICWIC|NATURE ET DECOUVERTES'],
-['Impôts & taxes','DGFIP|DGFIP IMPOT|IMPOT|IMPOTS|TRESOR PUBLIC|FINANCES PUBLIQUES|TAXE FONCIERE|TAXE D HABITATION|TAXE HABITATION|REDEVANCE|URSSAF|AMENDE|ANTAI|TIMBRE FISCAL'],
-['Prêt immobilier','PRET IMMOBILIER|PRET IMMO|CREDIT IMMOBILIER|CRED IMMO|ECHEANCE PRET IMMO'],
-['Prêt / Crédit','CETELEM|COFIDIS|SOFINCO|YOUNITED|ONEY|FRANFINANCE|COFINOGA|FLOA|KLARNA|SCALAPAY|CREDIT CONSO|PRET PERSO'],
+['Alimentation (courses)','CARREFOUR|LECLERC|INTERMARCHE|SUPER U|HYPER U|U EXPRESS|MONOPRIX|FRANPRIX|LIDL|ALDI|AUCHAN|CORA|NETTO|COLRUYT|GRAND FRAIS|BIOCOOP|NATURALIA|LA VIE CLAIRE|PICARD|THIRIET|G20|SPAR|VIVAL|PROXI|CASINO|GEANT|MARKET|SUPERMARCHE|HYPERMARCHE|SUPERETTE|EPICERIE|DRIVE|CHRONODRIVE|BOUCHERIE|CHARCUTERIE|POISSONNERIE|FROMAGERIE|PRIMEUR|MARCHE COUVERT|GRAND MARCHE|JOW'],
+['Boulangerie / Café / Snacking quotidien','BOULANGERIE|PATISSERIE|FOURNIL|MAXICOFFEE|SELECTA|STARBUCKS|COLUMBUS CAFE|LA MIE CALINE|BRIOCHE DOREE'],
+['Restaurants / Bars / Sorties','CAFE|RESTAURANT|RESTO|BRASSERIE|PIZZERIA|PIZZA HUT|DOMINO S PIZZA|PIZZA|MCDONALD|MC DONALD|MCDO|BURGER KING|QUICK|KFC|SUBWAY|O TACOS|TACOS|KEBAB|SUSHI|WOK|CREPERIE|BISTROT|BISTRO|TAVERNE|BRUNCH|UBER EATS|DELIVEROO|JUST EAT|FRICHTI|BUFFALO GRILL|HIPPOPOTAMUS|COURTEPAILLE|DEL ARTE|LEON DE BRUXELLES|BIG FERNAND|FIVE GUYS|FLUNCH|GLACIER|SALON DE THE|BAR TABAC'],
+['Recharge véhicule électrique / Carburant','STATION SERVICE|TOTAL ACCESS|TOTAL ENERGIES STATION|TOTALENERGIES CHARGI|ESSO|SHELL|AVIA|ELAN|CARBURANT|GAZOLE|SP95|SP98|PEAGE|AUTOROUTE|VINCI AUTOROUTES|SANEF|APRR|COFIROUTE|ESCOTA|IONITY|CHARGEMAP|CHARGEPOINT|ZUNDER|ALLEGO|POWERDOT|ENI|VAPO SITE|NORAUTO|FEU VERT|MIDAS|SPEEDY|EUROMASTER|ROADY|CARGLASS|CONTROLE TECHNIQUE|DEKRA|AUTOVISION|SECURITEST|GARAGE|EUROPCAR|HERTZ|SIXT|RENT A CAR|HYUNDAI CAPITAL'],
+['Transport (train/bus/parking)','SNCF|OUIGO|TRAINLINE|BLABLACAR|FLIXBUS|OUIBUS|RATP|NAVIGO|ALTER SERVICES|UBER|BOLT|FREENOW|TAXI|VELIB|TROTTINETTE|PARKING|INDIGO PARK|EFFIA|SAEMES|ONEPARK|ZENPARK'],
+['Habillement / Beauté','ZARA|H M|KIABI|PRIMARK|UNIQLO|CELIO|JULES|BONOBO|JENNYFER|PIMKIE|CAMAIEU|PROMOD|MANGO|BERSHKA|PULL AND BEAR|STRADIVARIUS|COURIR|FOOT LOCKER|JD SPORTS|LA HALLE|GEMO|BESSON|ERAM|ANDRE CHAUSSURES|MINELLI|SARENZA|ZALANDO|VINTED|SHEIN|ASOS|VEEPEE|SHOWROOMPRIVE|GALERIES LAFAYETTE|PRINTEMPS|KOOKAI|NAF NAF|ETAM|UNDIZ|CHAUSSURES|CHAUSSEA|GIFI|ZEEMAN|NOZ|CLAIRES|ONGLERIE'],
+['Sport / Loisirs / Abonnements','FNAC|CULTURA|CINEMA|CGR|UGC|PATHE|GAUMONT|KINEPOLIS|BASIC FIT|FITNESS PARK|KEEP COOL|ORANGE BLEUE|NEONESS|WEFIT|SALLE DE SPORT|PISCINE|BOWLING|LASER GAME|ESCAPE GAME|KARTING|ACCROBRANCHE|MUSEE|THEATRE|CONCERT|TICKETMASTER|BILLETREDUC|SHOTGUN|HELLOASSO|HELLO ASSO|DECATHLON|INTERSPORT|GO SPORT|JARDILAND|TRUFFAUT|GAMM VERT|BOTANIC|MICROMANIA|MOMOX|ABONNEMENT'],
+['Télécom / Abonnements num.','ORANGE|SFR|BOUYGUES|FREE MOBILE|FREE TELECOM|FREE HAUTDEBIT|SOSH|RED BY SFR|B AND YOU|PRIXTEL|NRJ MOBILE|LA POSTE MOBILE|CORIOLIS|LEBARA|NETFLIX|SPOTIFY|DEEZER|DISNEY|AMAZON PRIME|PRIME VIDEO|CANAL PLUS|CANALPLUS|OCS|APPLE COM BILL|APPLE COM|ITUNES|GOOGLE STORAGE|GOOGLE ONE|YOUTUBE|MICROSOFT|OFFICE 365|ADOBE|DROPBOX|ICLOUD|PLAYSTATION|XBOX|NINTENDO|STEAM|AUDIBLE|KINDLE|MOLOTOV|PARAMOUNT|CRUNCHYROLL'],
+['Logement / Charges','LOYER|SYNDIC|COPROPRIETE|FONCIA|NEXITY|CITYA|ORPI|CENTURY 21|LAFORET|SQUARE HABITAT|EDF|ENGIE|TOTALENERGIES ELECTRICITE|ENI GAS|VATTENFALL|EKWATEUR|MINT ENERGIE|OHM ENERGIE|PLANETE OUI|ILEK|GRDF|ENEDIS|VEOLIA|SUEZ|SAUR|SYNDICAT EAUX|PRIMAGAZ|ANTARGAZ|BUTAGAZ|FIOUL|GAZ NATUREL|JCM CONFORT|HOMESTIA|IKEA|CONFORAMA|MAISONS DU MONDE|ALINEA|BUT |DARTY|ELECTRO DEPOT|CENTRAKOR|FOIR FOUILLE|BUREAU VALLEE|PRET HABITAT'],
+['Bricolage / Maison','LEROY MERLIN|CASTORAMA|BRICO DEPOT|BRICOMARCHE|MR BRICOLAGE|WELDOM|POINT P|GEDIMAT|BRICORAMA|ACTION |PLOMBIER|ELECTRICIEN|CHAUFFAGISTE|SERRURIER'],
+['Assurances / Mutuelle','MAIF|MACIF|MATMUT|MAAF|GMF|AXA|ALLIANZ|GENERALI|GROUPAMA|MMA|AG2R|HARMONIE MUTUELLE|MGEN|MALAKOFF|APRIL|LUKO|DIRECT ASSURANCE|L OLIVIER|EUROFIL|SWISSLIFE|ABEILLE ASSURANCES|PACIFICA|ASSURANCE|ASSURANCES|MUTUELLE|PREVOYANCE|THELEM|HENNER'],
+['Prêts / Crédits','PRET IMMOBILIER|PRET IMMO|CREDIT IMMOBILIER|CRED IMMO|ECHEANCE PRET IMMO|PRET TRAVAUX|REMBOURSEMENT DE PRET|CETELEM|COFIDIS|SOFINCO|YOUNITED|ONEY|FRANFINANCE|COFINOGA|FLOA|KLARNA|SCALAPAY|CREDIT CONSO|PRET PERSO'],
+['Santé / Bien-être','PHARMACIE|PHARMACIEN|DOCTEUR|MEDECIN|CABINET MEDICAL|LABORATOIRE|BIOGROUP|CERBALLIANCE|SYNLAB|DENTISTE|ORTHODONT|OPHTALMO|OPTICIEN|OPTIC|KRYS|AFFLELOU|GENERALE D OPTIQUE|GRAND OPTICAL|AUDIKA|AMPLIFON|KINE|KINESITHERAPEUTE|OSTEOPATHE|PODOLOGUE|DERMATO|RADIOLOGIE|IMAGERIE|CLINIQUE|HOPITAL|CENTRE HOSPITALIER|SAGE FEMME|INFIRMIER|PSYCHOLOGUE|ORTHOPHONISTE|YVES ROCHER|COIFFEUR|COIFFURE|INSTITUT DE BEAUTE'],
+['Vacances / Ski','BOOKING|AIRBNB|ABRITEL|HOTEL|IBIS|NOVOTEL|MERCURE|CAMPANILE|B B HOTEL|PREMIERE CLASSE|KYRIAD|LOGIS DE FRANCE|GITE|CAMPING CAR|CAMPING|HUTTOPIA|FLOWER CAMPINGS|CAPFUN|SIBLU|YELLOH|CENTER PARCS|BELAMBRA|VVF|PIERRE ET VACANCES|CLUB MED|TUI|FRAM|PROMOVACANCES|LASTMINUTE|EXPEDIA|OPODO|EDREAMS|AIR FRANCE|EASYJET|RYANAIR|TRANSAVIA|VUELING|VOLOTEA|BRITTANY FERRIES|FERRY|PITCHUP|OFFICE DE TOURISME|DOMAINE SKIABLE|DOMAINES SKIABLES|REMONTEES MECANIQUES|SKISHOP'],
+['Enfants / Ecole / Activités','CRECHE|ASSISTANTE MATERNELLE|ASS MAT|GARDERIE|PERISCOLAIRE|CANTINE|CENTRE DE LOISIRS|ALSH|PAJEMPLOI|ECOLE|COLLEGE|LYCEE|LYCEO|ORCHESTRA|VERTBAUDET|PETIT BATEAU|OKAIDI|SERGENT MAJOR|JACADI|AUBERT|AUTOUR DE BEBE|OXYBUL|KING JOUET|LA GRANDE RECRE|JOUE CLUB|PICWIC|NATURE ET DECOUVERTES|FEDERATION FRANCAISE'],
+['Impôts / Taxes locales','DGFIP|DGFIP IMPOT|IMPOT|IMPOTS|TRESOR PUBLIC|FINANCES PUBLIQUES|TAXE FONCIERE|TAXE D HABITATION|TAXE HABITATION|REDEVANCE|URSSAF|AMENDE|ANTAI|TIMBRE FISCAL|SGC |SERVICE DE GESTION COMPTABLE|COMMUNAUTE DE COMMUNES|HORODATEUR|PAYBYPHONE|PBP '],
+['Shopping en ligne / Divers','AMAZON|CDISCOUNT|PHOTOMATON|ETSY|EBAY|LEBONCOIN'],
+['Presse / Librairie','PRESSE|MAISON DE LA PRESSE|LIBRAIRIE'],
+['Frais postaux','LA POSTE|LAPOSTE|CHRONOPOST|COLISSIMO|MONDIAL RELAY'],
 ['Frais bancaires','FRAIS BANCAIRES|COTISATION CARTE|COTISATION JURIDIQUE|COMMISSION INTERVENTION|AGIOS|FRAIS TENUE COMPTE|FRAIS IRREGULARITES|INTERETS DEBITEURS|OPPOSITION CARTE'],
-['Épargne','LIVRET A|LIVRET JEUNE|LDDS|LEP |PEL |CEL |COMPTE EPARGNE|EPARGNE|LINXEA|YOMONI|NALO|RAMIFY|TRADE REPUBLIC|BOURSORAMA VIE|ASSURANCE VIE'],
-['Salaire / Revenus','SALAIRE|PAIE|PAYE|REMUNERATION|POLE EMPLOI|FRANCE TRAVAIL|CAF |ALLOCATION|ALLOCATIONS|MSA |CARSAT|AGIRC|ARRCO|PENSION|RETRAITE|INDEMNITE|INDEMNITES|CPAM|AMELI|REMBOURSEMENT SECU'],
-['Cadeaux','INTERFLORA|FLEURISTE|AQUARELLE|BERGAMOTTE']
+['Virements internes / Lydia (épargne interne)','LIVRET A|LIVRET JEUNE|LDDS|LEP |PEL |CEL |COMPTE EPARGNE|EPARGNE|LINXEA|YOMONI|NALO|RAMIFY|TRADE REPUBLIC|BOURSORAMA VIE|ASSURANCE VIE'],
+['Virements reçus / Revenus','SALAIRE|PAIE|PAYE|REMUNERATION|POLE EMPLOI|FRANCE TRAVAIL|CAF |ALLOCATION|ALLOCATIONS|MSA |CARSAT|AGIRC|ARRCO|PENSION|RETRAITE|INDEMNITE|INDEMNITES|CPAM|AMELI|REMBOURSEMENT SECU']
 ];
 
 // Motifs à plat, les plus longs d'abord (« AMAZON PRIME » avant « AMAZON »).
@@ -1223,11 +1233,14 @@ function guessCategory(desc, amount, ctx){
   }
 
   // 4) nature de l'opération, en dernier recours
-  if(kind==='retrait') return {category:'Autres', why:'retrait d’espèces', level:'weak'};
+  if(kind==='retrait') return {category:'Retraits espèces', why:'retrait d’espèces', level:'sure'};
+  if(kind==='cheque') return {category:'Chèques émis', why:'chèque émis', level:'sure'};
   if(amount > 0 && (kind==='virement' || kind==='prelevement')){
     if(/\b(SALAIRE|PAIE|PAYE|REMUNERATION|SOLDE TOUT COMPTE)\b/.test(norm))
-      return {category:'Salaire / Revenus', why:'virement de salaire', level:'sure'};
+      return {category:'Virements reçus / Revenus', why:'virement de salaire', level:'sure'};
   }
+  if(kind==='virement' && amount > 0) return {category:'Virements reçus / Revenus', why:'virement reçu', level:'weak'};
+  if(kind==='virement' && amount < 0) return {category:'Virements émis (tiers)', why:'virement émis', level:'weak'};
   return {category:'À catégoriser', why:'', level:null};
 }
 
@@ -1368,8 +1381,8 @@ function importerHTML(){
 }
 
 // ---------- PRÉVISIONNEL ----------
-let recForm = {label:'',amount:'',category:'Abonnements',day:'1',type:'expense'};
-let upForm = {label:'',amount:'',category:'Autres',date:''};
+let recForm = {label:'',amount:'',category:'Sport / Loisirs / Abonnements',day:'1',type:'expense'};
+let upForm = {label:'',amount:'',category:'Non catégorisé',date:''};
 let resForm = {label:'',amount:''};
 let projHorizon = 6; // horizon de projection en mois : 3, 6, 12 ou 24
 
@@ -2001,7 +2014,7 @@ function attachPrevisionnelHandlers(){
       state.transactions.push({
         id:uid(), date:todayISO(),
         amount:-m, // vers la réserve = sortie du courant ; retrait = entrée
-        category:'Épargne',
+        category:SAVINGS_CAT,
         description:(m>0?'Virement vers ':'Retrait de ')+r.label,
         details:[], source:'manuel', createdAt:Date.now(), updatedAt:Date.now()
       });
@@ -2084,7 +2097,7 @@ function attachPrevisionnelHandlers(){
     const day = Math.min(31, Math.max(1, parseInt(recForm.day,10)||1));
     if(!recForm.label.trim() || !amt){ showToast('⚠ Merci d’indiquer un libellé et un montant.', 'error'); return; }
     state.recurring.push({id:uid(), label:recForm.label.trim(), amount:amt, category:recForm.category, day, type:recForm.type, createdAt:Date.now()});
-    recForm = {label:'',amount:'',category:'Abonnements',day:'1',type:'expense'};
+    recForm = {label:'',amount:'',category:'Sport / Loisirs / Abonnements',day:'1',type:'expense'};
     saveData(); render();
   };
   document.querySelectorAll('[data-rm-rec]').forEach(b=>{
@@ -2109,7 +2122,7 @@ function attachPrevisionnelHandlers(){
     const amt = parseUserAmount(upForm.amount);
     if(!upForm.label.trim() || !amt || !upForm.date){ showToast('⚠ Merci d’indiquer un libellé, un montant et une date.', 'error'); return; }
     state.upcoming.push({id:uid(), label:upForm.label.trim(), amount:amt, category:upForm.category, date:upForm.date, createdAt:Date.now()});
-    upForm = {label:'',amount:'',category:'Autres',date:''};
+    upForm = {label:'',amount:'',category:'Non catégorisé',date:''};
     saveData(); render();
   };
   document.querySelectorAll('[data-rm-up]').forEach(b=>{
@@ -2252,7 +2265,7 @@ function attachCategoriesHandlers(){
     if(state.categories.some(c=>c.name.toLowerCase()===name.toLowerCase())){
       showToast('⚠ Cette catégorie existe déjà.', 'error'); return;
     }
-    const idx = state.categories.findIndex(c=>c.name==='Autres');
+    const idx = state.categories.findIndex(c=>c.name==='Non catégorisé');
     state.categories.splice(idx<0?state.categories.length:idx, 0, {name, color:newCatForm.color, updatedAt:Date.now()});
     // si elle avait été supprimée par le passé, on retire son tombstone
     state.deleted = (state.deleted||[]).filter(d=>d.id!=='cat:'+name);
@@ -2299,10 +2312,10 @@ function attachCategoriesHandlers(){
               + state.recurring.filter(r=>r.category===name).length
               + state.upcoming.filter(u=>u.category===name).length;
       const msg = n>0
-        ? `Supprimer « ${escapeHTML(name)} » ?\n${n} élément(s) seront reclassés en « Autres ».`
+        ? `Supprimer « ${escapeHTML(name)} » ?\n${n} élément(s) seront reclassés en « Non catégorisé ».`
         : `Supprimer la catégorie « ${escapeHTML(name)} » ?`;
       if(!await askConfirm(msg)) return;
-      renameCategoryRefs(name, 'Autres');
+      renameCategoryRefs(name, 'Non catégorisé');
       state.categories = state.categories.filter(c=>c.name!==name);
       markDeleted('cat:'+name);
       saveData(); showToast(`Catégorie « ${name} » supprimée`, 'ok'); render();
