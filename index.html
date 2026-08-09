@@ -457,8 +457,10 @@ let state = {
   deleted:[],      // tombstones {id,at} pour que les suppressions survivent à la fusion à deux
   importStep:0,
   importRaw:null,
+  importSheets:null,
+  importSheetName:null,
   importHeaderIdx:0,
-  importMapping:{date:null,desc:null,amount:null,debit:null,credit:null,mode:'single'},
+  importMapping:{date:null,desc:null,amount:null,debit:null,credit:null,category:null,mode:'single'},
   importParsed:[],
   importResult:null,
   historyFilters:{month:'all',cat:'all',q:''}
@@ -1281,7 +1283,13 @@ function importerHTML(){
     return `
     <h2 class="section-title">Associer les colonnes</h2>
     <div class="card">
-      <p class="muted">Ligne d’en-tête détectée : ligne ${state.importHeaderIdx+1}. Changez-la si besoin.</p>
+      ${state.importSheets && Object.keys(state.importSheets).length>1 ? `
+      <label style="margin-top:0;">Onglet</label>
+      <select id="map-sheet">
+        ${Object.keys(state.importSheets).map(name=>`<option value="${escapeHTML(name)}" ${name===state.importSheetName?'selected':''}>${escapeHTML(name)}</option>`).join('')}
+      </select>
+      ` : ''}
+      <p class="muted" style="margin-top:${state.importSheets && Object.keys(state.importSheets).length>1 ? '14px':'0'};">Ligne d’en-tête détectée : ligne ${state.importHeaderIdx+1}. Changez-la si besoin.</p>
       <label style="margin-top:14px;">Ligne d’en-tête</label>
       <select id="map-header-row">
         ${state.importRaw.slice(0,10).map((r,i)=>`<option value="${i}" ${i===state.importHeaderIdx?'selected':''}>Ligne ${i+1} : ${escapeHTML(r.slice(0,4).join(' | '))}</option>`).join('')}
@@ -1292,6 +1300,9 @@ function importerHTML(){
 
       <label>Colonne Libellé</label>
       <select id="map-desc">${colOptions(state.importMapping.desc)}</select>
+
+      <label>Colonne Catégorie <span class="muted" style="font-size:11px;">(optionnel, si le fichier est déjà catégorisé)</span></label>
+      <select id="map-category">${colOptions(state.importMapping.category)}</select>
 
       <div class="toggle-group" style="margin-top:18px;">
         <button type="button" class="toggle-btn ${state.importMapping.mode==='single'?'active-exp':''}" data-mode="single">Une colonne montant</button>
@@ -1348,7 +1359,7 @@ function importerHTML(){
         ${nMatched>0?`<br>${nMatched} ligne(s) correspondent à vos saisies manuelles et ne seront pas dupliquées.`:''}
         ${nDupe>0?`<br>${nDupe} doublon(s) d’un import précédent ignoré(s).`:''}
       </div>
-      <p class="muted" style="margin-top:14px;font-size:12px;">Les catégories proposées viennent de vos classements passés, de vos charges récurrentes et d’un dictionnaire d’enseignes. Corrigez ici ce qui ne va pas : chaque correction sert aux imports suivants.</p>
+      <p class="muted" style="margin-top:14px;font-size:12px;">Les catégories proposées viennent, dans l’ordre, de la colonne Catégorie du fichier (si vous l’avez indiquée), de vos classements passés, de vos charges récurrentes, puis d’un dictionnaire d’enseignes. Corrigez ici ce qui ne va pas : chaque correction sert aux imports suivants.</p>
       ${news.length ? `
       <div class="imp-toolbar">
         <button type="button" class="toggle-btn ${!importOnlyUnknown?'active-inc':''}" data-imp-filter="all">Tout (${news.length})</button>
@@ -2827,6 +2838,14 @@ function attachImporterHandlers(){
     // nombre ou null, sinon les contrôles « colonne non renseignée » passent à côté
     // et l'import se termine silencieusement sur 0 ligne
     const colVal = v => (v==='' || v==null) ? null : Number(v);
+    const sheetSel = document.getElementById('map-sheet');
+    if(sheetSel) sheetSel.onchange = e=>{
+      state.importSheetName = e.target.value;
+      state.importRaw = state.importSheets[e.target.value];
+      state.importHeaderIdx = guessHeaderRow(state.importRaw);
+      autoGuessMapping(state.importRaw[state.importHeaderIdx]||[], state.importRaw.slice(state.importHeaderIdx+1));
+      render();
+    };
     document.getElementById('map-header-row').onchange = e=>{
       state.importHeaderIdx = parseInt(e.target.value,10);
       // nouvelle ligne d'en-tête : les colonnes déduites de l'ancienne n'ont plus de sens
@@ -2835,6 +2854,8 @@ function attachImporterHandlers(){
     };
     document.getElementById('map-date').onchange = e=>{ state.importMapping.date = colVal(e.target.value); };
     document.getElementById('map-desc').onchange = e=>{ state.importMapping.desc = colVal(e.target.value); };
+    const catSel = document.getElementById('map-category');
+    if(catSel) catSel.onchange = e=>{ state.importMapping.category = colVal(e.target.value); };
     document.querySelectorAll('[data-mode]').forEach(b=>{
       b.onclick = ()=>{ state.importMapping.mode = b.dataset.mode; render(); };
     });
@@ -2883,8 +2904,8 @@ function attachImporterHandlers(){
 }
 
 function resetImport(){
-  state.importStep=0; state.importRaw=null; state.importHeaderIdx=0;
-  state.importMapping={date:null,desc:null,amount:null,debit:null,credit:null,mode:'single'};
+  state.importStep=0; state.importRaw=null; state.importSheets=null; state.importSheetName=null; state.importHeaderIdx=0;
+  state.importMapping={date:null,desc:null,amount:null,debit:null,credit:null,category:null,mode:'single'};
   state.importParsed=[]; state.importResult=null;
 }
 
@@ -2907,19 +2928,50 @@ function handleFile(e){
     try{
       const data = new Uint8Array(evt.target.result);
       const wb = XLSX.read(data, {type:'array', cellDates:false});
-      const sheet = wb.Sheets[wb.SheetNames[0]];
-      const rows = XLSX.utils.sheet_to_json(sheet, {header:1, raw:true, defval:''});
-      state.importRaw = rows;
-      state.importHeaderIdx = guessHeaderRow(rows);
-      autoGuessMapping(rows[state.importHeaderIdx]||[], rows.slice(state.importHeaderIdx+1));
+      const sheets = {};
+      wb.SheetNames.forEach(name=>{
+        sheets[name] = XLSX.utils.sheet_to_json(wb.Sheets[name], {header:1, raw:true, defval:''});
+      });
+      const best = pickBestSheet(wb.SheetNames, sheets);
+      state.importSheets = sheets;
+      state.importSheetName = best;
+      state.importRaw = sheets[best];
+      state.importHeaderIdx = guessHeaderRow(state.importRaw);
+      autoGuessMapping(state.importRaw[state.importHeaderIdx]||[], state.importRaw.slice(state.importHeaderIdx+1));
       state.importStep = 1;
       render();
+      if(wb.SheetNames.length>1) showToast(`Onglet « ${best} » sélectionné automatiquement (${wb.SheetNames.length} onglets détectés).`, 'ok');
     }catch(err){
       showToast('⚠ Impossible de lire ce fichier. Vérifiez qu’il s’agit bien d’un export .xls, .xlsx ou .csv non protégé.', 'error');
       console.error(err);
     }
   };
   reader.readAsArrayBuffer(file);
+}
+
+// Un classeur peut contenir plusieurs onglets (ex. une synthèse + le détail des
+// opérations) : prendre le premier à l'aveugle fait échouer l'import sur l'onglet
+// qui n'a ni Date ni Libellé. On note chaque onglet selon la présence de ces
+// colonnes et le nombre de lignes de données exploitables, et on retient le mieux noté.
+function scoreSheet(rows){
+  if(!Array.isArray(rows) || rows.length<2) return -1;
+  const hdrIdx = guessHeaderRow(rows);
+  const header = rows[hdrIdx]||[];
+  const n = h=>stripAccents(String(h||'')).toLowerCase();
+  const hasDate = header.some(h=>n(h).includes('date'));
+  const hasDesc = header.some(h=>{const v=n(h); return v.includes('libell')||v.includes('description')||v.includes('intitule')||v.includes('motif');});
+  const hasAmount = header.some(h=>{const v=n(h); return v.includes('montant')||v.includes('debit')||v.includes('credit')||v.includes('somme');});
+  const dataRows = rows.length - hdrIdx - 1;
+  if(!hasDate && !hasAmount) return 0; // ne ressemble pas à un relevé
+  return (hasDate?10:0) + (hasDesc?10:0) + (hasAmount?10:0) + Math.min(dataRows,50);
+}
+function pickBestSheet(names, sheets){
+  let best = names[0], bestScore = -1;
+  names.forEach(name=>{
+    const s = scoreSheet(sheets[name]);
+    if(s>bestScore){ bestScore = s; best = name; }
+  });
+  return best;
 }
 
 function guessHeaderRow(rows){
@@ -2935,7 +2987,7 @@ function guessHeaderRow(rows){
 // la colonne Libellé et l'import repartait avec des dates en guise de marchands.
 // Une colonne ne peut donc porter qu'un seul rôle, attribué au meilleur candidat.
 function autoGuessMapping(headerRow, rows){
-  const cand = {date:[], desc:[], amount:[], debit:[], credit:[]};
+  const cand = {date:[], desc:[], amount:[], debit:[], credit:[], category:[]};
   headerRow.forEach((h,i)=>{
     const n = stripAccents(h).toLowerCase().trim();
     if(!n) return;
@@ -2952,6 +3004,7 @@ function autoGuessMapping(headerRow, rows){
     if(n.includes('montant')||n.includes('somme')){
       cand.amount.push({i, s:(n.includes('debit')||n.includes('credit')) ? 1 : 3});
     }
+    if(n.includes('categ')) cand.category.push({i, s:3});
   });
   const taken = new Set();
   const pick = list=>{
@@ -2965,6 +3018,7 @@ function autoGuessMapping(headerRow, rows){
   const debit  = pick(cand.debit);
   const credit = pick(cand.credit);
   const amount = pick(cand.amount);
+  const category = pick(cand.category);
 
   // en-têtes absents ou exotiques : on retient la colonne la plus « textuelle »
   if(desc===null && Array.isArray(rows)){
@@ -2985,6 +3039,7 @@ function autoGuessMapping(headerRow, rows){
 
   state.importMapping.date = date;
   state.importMapping.desc = desc;
+  state.importMapping.category = category;
   if(debit!==null && credit!==null){
     state.importMapping.mode='split';
     state.importMapping.debit = debit;
@@ -3025,6 +3080,17 @@ function parseAmountCell(v){
   return isNaN(n) ? 0 : n;
 }
 
+// Compare la catégorie déjà écrite dans le fichier importé aux catégories
+// existantes de l'app, en ignorant accents/casse/espaces — mais sans jamais en
+// créer une nouvelle à la volée : une valeur non reconnue repasse par le
+// dictionnaire d'enseignes plutôt que de polluer la liste de catégories.
+function matchExistingCategory(raw){
+  const norm = s => stripAccents(String(s||'')).toLowerCase().replace(/[^a-z0-9]+/g,' ').trim();
+  const target = norm(raw);
+  if(!target) return null;
+  const found = state.categories.find(c=>norm(c.name)===target);
+  return found ? found.name : null;
+}
 function doParseImport(){
   const map = state.importMapping;
   if(map.date==null || map.desc==null){ showToast('⚠ Merci d’indiquer les colonnes Date et Libellé.', 'error'); return; }
@@ -3047,7 +3113,8 @@ function doParseImport(){
     if(!dateVal && !amount) return;
     const iso = excelDateToISO(dateVal);
     if(!iso || amount===0) return;
-    parsed.push({date:iso, description:String(descVal||'').trim(), amount});
+    const categVal = map.category!=null ? String(r[map.category]||'').trim() : '';
+    parsed.push({date:iso, description:String(descVal||'').trim(), amount, importedCategory:categVal});
   });
   if(!parsed.length){
     showToast('⚠ Aucune ligne exploitable avec ces colonnes. Vérifiez la ligne d’en-tête et les colonnes choisies.', 'error');
@@ -3059,10 +3126,20 @@ function doParseImport(){
   const ctx = {hist: buildHistoryIndex()};
   parsed.forEach(p=>{
     if(p.status !== 'new') return;
-    const g = guessCategory(p.description, p.amount, ctx);
-    p.category = g.category;
-    p.why = g.why;
-    p.level = g.level;
+    // le fichier importé porte parfois déjà une catégorie (relevé retravaillé
+    // à la main) : on la reprend telle quelle si elle correspond à une catégorie
+    // existante, plutôt que de la re-deviner via le dictionnaire d'enseignes
+    const fileCat = p.importedCategory ? matchExistingCategory(p.importedCategory) : null;
+    if(fileCat){
+      p.category = fileCat;
+      p.why = 'déjà catégorisé dans le fichier';
+      p.level = 'sure';
+    } else {
+      const g = guessCategory(p.description, p.amount, ctx);
+      p.category = g.category;
+      p.why = g.why;
+      p.level = g.level;
+    }
   });
   state.importParsed = parsed;
   state.importStep = 2;
