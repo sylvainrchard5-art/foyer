@@ -444,23 +444,36 @@
     font-family:'Sora',sans-serif;font-size:11px;font-weight:700;
     letter-spacing:.14em;text-transform:uppercase;color:var(--ink-soft);
   }
-  .drill-row{padding:11px 0;border-bottom:1px solid var(--line);}
+  .drill-row{padding:12px 0;border-bottom:1px solid var(--line);}
   .drill-row:last-child{border-bottom:none;}
-  .drill-line{display:flex;align-items:baseline;gap:9px;}
+  .drill-head{display:flex;align-items:baseline;justify-content:space-between;gap:10px;}
   .drill-date{
     flex:none;font-family:'JetBrains Mono',monospace;
     font-size:11px;color:var(--ink-faint);
   }
-  .drill-desc{
-    flex:1;min-width:0;font-size:13px;
-    white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
-  }
   .drill-amt{
     flex:none;font-family:'JetBrains Mono',monospace;
-    font-size:12.5px;font-weight:700;color:var(--coral);
+    font-size:13px;font-weight:700;color:var(--coral);
+  }
+  /* le libellé bancaire porte souvent l'enseigne en fin de chaîne : le tronquer
+     le rendait inutilisable pour reconnaître l'opération. Il prend toute la
+     largeur et se poursuit sur trois lignes au besoin. */
+  .drill-desc{
+    font-size:12.5px;line-height:1.45;color:var(--ink);
+    margin-top:4px;word-break:break-word;
+    display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;
+  }
+  .drill-foot{
+    display:flex;align-items:center;justify-content:space-between;
+    gap:8px;margin-top:7px;
+  }
+  .drill-tag{
+    font-size:10.5px;padding:3px 8px;border-radius:20px;
+    border:1px solid var(--line-strong);
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:52%;
   }
   select.drill-cat{
-    width:auto;max-width:60%;margin:6px 0 0 auto;display:block;
+    width:auto;max-width:48%;margin:0;flex:none;
     padding:6px 26px 6px 10px;
     font-size:11.5px;background-color:var(--card-2);
     color:var(--ink-soft);
@@ -1256,15 +1269,15 @@ function evolutionHTML(){
   const lignes = b.legend.map(c=>{
     const pct = Math.round(c.total/b.grand*100);
     const t = b.trend.get(c.name);
-    // « Autres catégories » est un regroupement d'affichage, pas une vraie catégorie :
-    // il n'y a rien à ouvrir ni à reclasser derrière
-    const cliquable = c.name!=='Autres catégories';
-    return `<div class="legend-row${cliquable?' drillable':''}" ${cliquable?`data-drill="${escapeHTML(c.name)}"`:''}>
+    // « Autres catégories » regroupe tout ce qui sort du haut de classement :
+    // il s'ouvre aussi, sinon les erreurs qui s'y cachent restent hors d'atteinte
+    const cible = c.name==='Autres catégories' ? AUTRES : c.name;
+    return `<div class="legend-row drillable" data-drill="${escapeHTML(cible)}">
       <span class="chip" style="background:${c.color}"></span>
       <span class="label">${escapeHTML(c.name)}</span>
       ${t!==undefined ? `<span class="pct" style="font-size:11px;">${fleche(t)}</span>` : `<span class="pct">${pct} %</span>`}
       <span class="amt" style="color:${c.color}">${fmt(c.total)}</span>
-      ${cliquable?'<span class="drill-arrow">›</span>':''}
+      <span class="drill-arrow">›</span>
     </div>`;
   }).join('');
 
@@ -1290,6 +1303,18 @@ function evolutionHTML(){
 let drill = null;   // {cat, period} ou null
 let drillQ = '';    // filtre libellé, sert aussi à cibler un reclassement en masse
 
+// Sentinelle : « Autres catégories » n'est pas une catégorie mais le regroupement
+// de tout ce qui sort du haut de classement. Il doit rester consultable, sinon
+// les erreurs de classement qui s'y cachent sont impossibles à corriger.
+const AUTRES = '__autres__';
+const estAutres = () => drill && drill.cat === AUTRES;
+
+// Les catégories effectivement détaillées dans l'Aperçu sur la période
+function catsDuHaut(period){
+  const b = periodBreakdown(lastMonths(period));
+  return new Set(b.legend.filter(c=>c.name!=='Autres catégories').map(c=>c.name));
+}
+
 function openDrill(cat, period){
   drill = {cat, period};
   drillQ = '';
@@ -1302,8 +1327,13 @@ function closeDrill(){ drill = null; drillQ = ''; render(); window.scrollTo(0,0)
 function drillTx(){
   const mks = new Set(lastMonths(drill.period));
   const q = drillQ.trim().toLowerCase();
+  const haut = estAutres() ? catsDuHaut(drill.period) : null;
   return state.transactions
-    .filter(t=>t.amount<0 && (t.category||'Non catégorisé')===drill.cat && mks.has(monthKey(t.date)))
+    .filter(t=>t.amount<0 && !isSavings(t) && mks.has(monthKey(t.date)))
+    .filter(t=>{
+      const c = t.category || 'Non catégorisé';
+      return estAutres() ? !haut.has(c) : c===drill.cat;
+    })
     .filter(t=>!q || (t.description||'').toLowerCase().includes(q))
     .sort((a,b)=>b.date.localeCompare(a.date));
 }
@@ -1325,7 +1355,9 @@ function reclasser(ids, target){
 function drillHTML(){
   const list = drillTx();
   const total = list.reduce((s,t)=>s+Math.abs(t.amount),0);
-  const info = catInfo(drill.cat);
+  const autres = estAutres();
+  const titre = autres ? 'Autres catégories' : drill.cat;
+  const info = autres ? {color:'#8FA096'} : catInfo(drill.cat);
   const per = drill.period===1 ? 'le mois précédent' : `les ${drill.period} derniers mois`;
 
   // regroupement par mois : on garde le repère temporel de l'Aperçu
@@ -1336,10 +1368,10 @@ function drillHTML(){
     byMonth.get(mk).push(t);
   });
 
-  // le menu ne réaffiche pas la catégorie courante — on vient de filtrer dessus,
-  // elle serait identique sur toutes les lignes. C'est une action, pas un état.
-  const catOpts = `<option value="">Reclasser…</option>` + state.categories
-    .filter(c=>c.name!==drill.cat)
+  // hors mode « Autres », inutile de reproposer la catégorie courante : elle est
+  // identique sur toutes les lignes. C'est une action, pas un état.
+  const catOpts = sel => `<option value="">Reclasser…</option>` + state.categories
+    .filter(c=>c.name!==(autres ? sel : drill.cat))
     .map(c=>`<option value="${escapeHTML(c.name)}">${escapeHTML(c.name)}</option>`).join('');
 
   const groupes = [...byMonth.entries()].map(([mk, txs])=>{
@@ -1349,24 +1381,32 @@ function drillHTML(){
       <span>${escapeHTML(monthLabel(mk))}</span>
       <span>${fmt(sous)}</span>
     </div>
-    ${txs.map(t=>`
+    ${txs.map(t=>{
+      const c = t.category || 'Non catégorisé';
+      const ci = catInfo(c);
+      return `
       <div class="drill-row">
-        <div class="drill-line">
+        <div class="drill-head">
           <span class="drill-date">${t.date.split('-').reverse().slice(0,2).join('/')}</span>
-          <span class="drill-desc">${escapeHTML(t.description||'(sans libellé)')}</span>
           <span class="drill-amt">${fmt(Math.abs(t.amount))}</span>
         </div>
-        <select class="drill-cat" data-recat="${t.id}">${catOpts}</select>
-      </div>`).join('')}`;
+        <div class="drill-desc">${escapeHTML(t.description||'(sans libellé)')}</div>
+        <div class="drill-foot">
+          ${autres ? `<span class="drill-tag" style="color:${ci.color};border-color:${ci.color}55;">${escapeHTML(c)}</span>` : '<span></span>'}
+          <select class="drill-cat" data-recat="${t.id}">${catOpts(c)}</select>
+        </div>
+      </div>`;
+    }).join('')}`;
   }).join('');
 
   return `
     <button class="ghost" id="drill-back" style="width:auto;padding:0;margin:0 0 14px;text-align:left;">← Retour à l’aperçu</button>
 
     <div class="card" style="border-left:3px solid ${info.color};">
-      <div class="mois-eyebrow" style="color:${info.color};">${escapeHTML(drill.cat)}</div>
+      <div class="mois-eyebrow" style="color:${info.color};">${escapeHTML(titre)}</div>
       <div class="mois-big" style="font-size:28px;color:var(--ink);">${fmt(total)}</div>
       <div class="mois-sub">${list.length} opération${list.length>1?'s':''} sur ${per}${drillQ?` · filtre « ${escapeHTML(drillQ)} »`:''}</div>
+      ${autres ? `<div class="mois-sub" style="color:var(--ink-faint);">Tout ce qui sort des postes principaux — c'est souvent là que se cachent les erreurs de classement.</div>` : ''}
     </div>
 
     <input type="text" id="drill-q" placeholder="Filtrer par libellé (ex. SUPER U)…" value="${escapeHTML(drillQ)}" style="margin-bottom:12px;">
@@ -1412,8 +1452,10 @@ function attachDrillHandlers(){
     if(!list.length) return;
     const cible = await askCategory({
       title:'Reclasser en masse',
-      message:`${list.length} opération(s) actuellement dans « ${drill.cat} »${drillQ?` et contenant « ${drillQ} »`:''} vont changer de catégorie.`,
-      exclude: drill.cat
+      message: estAutres()
+        ? `${list.length} opération(s) réparties dans plusieurs catégories secondaires${drillQ?` et contenant « ${drillQ} »`:''} vont toutes basculer vers la catégorie choisie.`
+        : `${list.length} opération(s) actuellement dans « ${drill.cat} »${drillQ?` et contenant « ${drillQ} »`:''} vont changer de catégorie.`,
+      exclude: estAutres() ? '' : drill.cat
     });
     if(!cible) return;
     const n = reclasser(list.map(t=>t.id), cible);
