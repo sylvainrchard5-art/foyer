@@ -431,8 +431,8 @@
   }
 
   /* détail d'une catégorie */
-  .legend-row.drillable{cursor:pointer;}
-  .legend-row.drillable:active{opacity:.6;}
+  .drillable{cursor:pointer;}
+  .drillable:active{opacity:.6;}
   .drill-arrow{
     flex:none;margin-left:6px;color:var(--ink-faint);
     font-size:17px;line-height:1;
@@ -1280,14 +1280,16 @@ function evolutionHTML(){
           ${deficit?'−':'+'}${fmt(Math.abs(m.solde))}
         </span>
       </div>
-      <div class="mrow-rail thin">
+      <div class="mrow-rail thin drillable" data-drill="${REVENUS}">
         <div class="mrow-inc" style="width:${Math.max(1,Math.round(m.revenus/maxMois*100))}%"></div>
       </div>
       <div class="mrow-rail">
         <div class="mrow-stack" style="width:${Math.max(1,Math.round(m.total/maxMois*100))}%">${segs}</div>
       </div>
       <div class="mrow-foot">
-        <span><i class="dot" style="background:var(--mint)"></i>${fmt(m.revenus)} encaissés</span>
+        <span class="drillable" data-drill="${REVENUS}" style="color:var(--mint);">
+          <i class="dot" style="background:var(--mint)"></i>${fmt(m.revenus)} encaissés ›
+        </span>
         <span>${fmt(m.total)} dépensés</span>
       </div>
     </div>`;
@@ -1343,7 +1345,9 @@ let drillQ = '';    // filtre libellé, sert aussi à cibler un reclassement en 
 // de tout ce qui sort du haut de classement. Il doit rester consultable, sinon
 // les erreurs de classement qui s'y cachent sont impossibles à corriger.
 const AUTRES = '__autres__';
-const estAutres = () => drill && drill.cat === AUTRES;
+const REVENUS = '__revenus__';
+const estAutres  = () => drill && drill.cat === AUTRES;
+const estRevenus = () => drill && drill.cat === REVENUS;
 
 // Les catégories effectivement détaillées dans l'Aperçu sur la période
 function catsDuHaut(period){
@@ -1365,8 +1369,12 @@ function drillTx(){
   const q = drillQ.trim().toLowerCase();
   const haut = estAutres() ? catsDuHaut(drill.period) : null;
   return state.transactions
-    .filter(t=>t.amount<0 && !isSavings(t) && mks.has(monthKey(t.date)))
+    .filter(t=>!isSavings(t) && mks.has(monthKey(t.date)))
+    // les revenus sont les seuls montants positifs retenus ; partout ailleurs on
+    // ne travaille que sur les dépenses
+    .filter(t=>estRevenus() ? t.amount>0 : t.amount<0)
     .filter(t=>{
+      if(estRevenus()) return true;
       const c = t.category || 'Non catégorisé';
       return estAutres() ? !haut.has(c) : c===drill.cat;
     })
@@ -1392,8 +1400,12 @@ function drillHTML(){
   const list = drillTx();
   const total = list.reduce((s,t)=>s+Math.abs(t.amount),0);
   const autres = estAutres();
-  const titre = autres ? 'Autres catégories' : drill.cat;
-  const info = autres ? {color:'#8FA096'} : catInfo(drill.cat);
+  const revenus = estRevenus();
+  // en mode Autres comme en mode Revenus les lignes n'ont pas toutes la même
+  // catégorie : on l'affiche sur chacune, sinon le reclassement se fait à l'aveugle
+  const multi = autres || revenus;
+  const titre = autres ? 'Autres catégories' : revenus ? 'Revenus encaissés' : drill.cat;
+  const info = autres ? {color:'#8FA096'} : revenus ? {color:'#5EE2A0'} : catInfo(drill.cat);
   const per = drill.period===1 ? 'le mois précédent' : `les ${drill.period} derniers mois`;
 
   // regroupement par mois : on garde le repère temporel de l'Aperçu
@@ -1404,10 +1416,10 @@ function drillHTML(){
     byMonth.get(mk).push(t);
   });
 
-  // hors mode « Autres », inutile de reproposer la catégorie courante : elle est
+  // hors mode multi, inutile de reproposer la catégorie courante : elle est
   // identique sur toutes les lignes. C'est une action, pas un état.
   const catOpts = sel => `<option value="">Reclasser…</option>` + state.categories
-    .filter(c=>c.name!==(autres ? sel : drill.cat))
+    .filter(c=>c.name!==(multi ? sel : drill.cat))
     .map(c=>`<option value="${escapeHTML(c.name)}">${escapeHTML(c.name)}</option>`).join('');
 
   const groupes = [...byMonth.entries()].map(([mk, txs])=>{
@@ -1424,11 +1436,11 @@ function drillHTML(){
       <div class="drill-row">
         <div class="drill-head">
           <span class="drill-date">${t.date.split('-').reverse().slice(0,2).join('/')}</span>
-          <span class="drill-amt">${fmt(Math.abs(t.amount))}</span>
+          <span class="drill-amt" style="color:${revenus?'var(--mint)':'var(--coral)'}">${revenus?'+':''}${fmt(Math.abs(t.amount))}</span>
         </div>
         <div class="drill-desc">${escapeHTML(t.description||'(sans libellé)')}</div>
         <div class="drill-foot">
-          ${autres ? `<span class="drill-tag" style="color:${ci.color};border-color:${ci.color}55;">${escapeHTML(c)}</span>` : '<span></span>'}
+          ${multi ? `<span class="drill-tag" style="color:${ci.color};border-color:${ci.color}55;">${escapeHTML(c)}</span>` : '<span></span>'}
           <select class="drill-cat" data-recat="${t.id}">${catOpts(c)}</select>
         </div>
       </div>`;
@@ -1443,6 +1455,7 @@ function drillHTML(){
       <div class="mois-big" style="font-size:28px;color:var(--ink);">${fmt(total)}</div>
       <div class="mois-sub">${list.length} opération${list.length>1?'s':''} sur ${per}${drillQ?` · filtre « ${escapeHTML(drillQ)} »`:''}</div>
       ${autres ? `<div class="mois-sub" style="color:var(--ink-faint);">Tout ce qui sort des postes principaux — c'est souvent là que se cachent les erreurs de classement.</div>` : ''}
+      ${revenus ? `<div class="mois-sub" style="color:var(--ink-faint);">Tout ce qui est entré sur le compte. Un remboursement ou un virement interne mal classé se corrige ici.</div>` : ''}
     </div>
 
     <input type="text" id="drill-q" placeholder="Filtrer par libellé (ex. SUPER U)…" value="${escapeHTML(drillQ)}" style="margin-bottom:12px;">
@@ -1452,7 +1465,7 @@ function drillHTML(){
 
     <div class="card" style="padding:6px 16px 14px;">
       ${list.length ? groupes : `<div class="empty"><div class="big">Aucune opération</div>
-        ${drillQ ? 'Aucun libellé ne correspond à ce filtre.' : `Rien dans cette catégorie sur ${per}.`}</div>`}
+        ${drillQ ? 'Aucun libellé ne correspond à ce filtre.' : `Rien ${revenus?'en revenus':'dans cette catégorie'} sur ${per}.`}</div>`}
     </div>
 
     <p class="muted" style="font-size:11.5px;line-height:1.6;margin:0 0 8px;">
@@ -1488,10 +1501,12 @@ function attachDrillHandlers(){
     if(!list.length) return;
     const cible = await askCategory({
       title:'Reclasser en masse',
-      message: estAutres()
+      message: estRevenus()
+        ? `${list.length} entrée(s) d'argent${drillQ?` contenant « ${drillQ} »`:''} vont toutes basculer vers la catégorie choisie.`
+        : estAutres()
         ? `${list.length} opération(s) réparties dans plusieurs catégories secondaires${drillQ?` et contenant « ${drillQ} »`:''} vont toutes basculer vers la catégorie choisie.`
         : `${list.length} opération(s) actuellement dans « ${drill.cat} »${drillQ?` et contenant « ${drillQ} »`:''} vont changer de catégorie.`,
-      exclude: estAutres() ? '' : drill.cat
+      exclude: (estAutres()||estRevenus()) ? '' : drill.cat
     });
     if(!cible) return;
     const n = reclasser(list.map(t=>t.id), cible);
