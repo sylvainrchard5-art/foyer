@@ -1695,12 +1695,13 @@ function rowHTML(t){
     ? `<span class="cat-badge" style="background:rgba(255,126,103,.15);color:var(--coral);border:1px dashed var(--coral)">?</span>`
     : `<span class="cat-badge" style="background:${info.color}22;color:${info.color};border:1px solid ${info.color}44">${initial}</span>`;
   const metaCat = toId ? '<span style="color:var(--coral);font-weight:600;">À identifier</span>' : escapeHTML(t.category);
+  const recurBadge = isRecurringLabel(t.description, t.amount) ? ' · <span style="color:var(--gold);font-weight:600;">🔁 tous les mois</span>' : '';
   return `
   <div class="ledger-row" data-row="${t.id}" ${rowStyle}>
     ${badgeHTML}
     <div class="info">
       <div class="desc">${escapeHTML(t.description||'(sans libellé)')}</div>
-      <div class="meta">${dateShort} · ${metaCat}${detailsCount}${t.reconciled?' · ✓ pointé':''}${t.autoCat && t.category!=='À catégoriser' ? ` · <span style="color:var(--ink-faint);">auto : ${escapeHTML(t.autoCat)}</span>` : ''}</div>
+      <div class="meta">${dateShort} · ${metaCat}${detailsCount}${recurBadge}${t.reconciled?' · ✓ pointé':''}${t.autoCat && t.category!=='À catégoriser' ? ` · <span style="color:var(--ink-faint);">auto : ${escapeHTML(t.autoCat)}</span>` : ''}</div>
     </div>
     <div class="amount ${t.amount<0?'neg':'pos'}">${t.amount<0?'−':'+'}${fmt(Math.abs(t.amount))}</div>
   </div>`;
@@ -2283,6 +2284,74 @@ function avgExpensesOverMonths(n){
   return {avg, moisCouverts:parMois.length, demandes:n};
 }
 
+// Répartition de cette même moyenne par catégorie, sur le même nombre de mois
+// couverts que le total — pour que les deux chiffres restent cohérents entre eux.
+function avgExpensesByCategory(n){
+  const {moisCouverts} = avgExpensesOverMonths(n);
+  const now = new Date();
+  const keys = [];
+  for(let i=1;i<=n;i++){
+    const total = now.getMonth()-i;
+    const y = now.getFullYear() + Math.floor(total/12);
+    const m = ((total%12)+12)%12;
+    keys.push(`${y}-${String(m+1).padStart(2,'0')}`);
+  }
+  const keySet = new Set(keys);
+  const perCat = new Map(); // cat -> total sur la période
+  state.transactions.forEach(t=>{
+    if(t.amount>=0 || isSavings(t) || !keySet.has(monthKey(t.date))) return;
+    perCat.set(t.category, (perCat.get(t.category)||0) + Math.abs(t.amount));
+  });
+  const denom = moisCouverts || 1;
+  return [...perCat.entries()]
+    .map(([category, total])=>({category, avg: total/denom}))
+    .filter(r=>r.avg > 0.5)
+    .sort((a,b)=>b.avg-a.avg);
+}
+
+// ---------- DÉTECTION DES DÉPENSES QUI REVIENNENT CHAQUE MOIS ----------
+// Distincte des charges récurrentes déclarées à la main (state.recurring) :
+// ici on regarde l'historique réel et on repère les commerçants/prélèvements
+// dont le libellé normalisé apparaît quasi tous les mois — abonnement, loyer,
+// assurance jamais saisis en « récurrent », ou charge oubliée dans ce menu.
+let _recurringLabelsCache = null, _recurringLabelsCacheN = -1;
+function getRecurringLabelSet(){
+  if(_recurringLabelsCache && _recurringLabelsCacheN === state.transactions.length) return _recurringLabelsCache;
+  const now = new Date();
+  const monthsBack = 6;
+  const validKeys = new Set();
+  for(let i=1;i<=monthsBack;i++){
+    const total = now.getMonth()-i;
+    const y = now.getFullYear() + Math.floor(total/12);
+    const m = ((total%12)+12)%12;
+    validKeys.add(`${y}-${String(m+1).padStart(2,'0')}`);
+  }
+  const byLabel = new Map(); // libellé normalisé -> mois où il apparaît
+  state.transactions.forEach(t=>{
+    if(t.amount>=0 || isSavings(t)) return;
+    const mk = monthKey(t.date);
+    if(!validKeys.has(mk)) return;
+    const norm = normLabel(t.description);
+    if(!norm || norm.length<3) return;
+    if(!byLabel.has(norm)) byLabel.set(norm, new Set());
+    byLabel.get(norm).add(mk);
+  });
+  const moisCouverts = new Set(state.transactions.map(t=>monthKey(t.date)).filter(mk=>validKeys.has(mk))).size;
+  // sur peu d'historique, exiger 3 mois pile ; au-delà, tolérer un mois manqué
+  const seuil = Math.max(3, Math.ceil(Math.min(moisCouverts, monthsBack) * 0.7));
+  const recurring = new Set();
+  byLabel.forEach((mois, norm)=>{ if(mois.size >= seuil) recurring.add(norm); });
+  _recurringLabelsCache = recurring;
+  _recurringLabelsCacheN = state.transactions.length;
+  return recurring;
+}
+function isRecurringLabel(desc, amount){
+  if(amount!==undefined && amount>=0) return false;
+  const norm = normLabel(desc);
+  if(!norm) return false;
+  return getRecurringLabelSet().has(norm);
+}
+
 function projectionSeries(horizon){
   const d = previsionData();
   const now = new Date();
@@ -2522,6 +2591,7 @@ function previsionnelHTML(){
   const firstNeg = series.find(s=>s.value<0);
   const reservesTotal = state.reserves.reduce((s,r)=>s+r.amount,0);
   const m6 = avgExpensesOverMonths(6);
+  const m6ByCat = avgExpensesByCategory(6);
 
   // marge mensuelle type (hors mois courant)
   const monthlyMargin = inRec - outRec - avgVar;
@@ -2539,6 +2609,17 @@ function previsionnelHTML(){
       <div style="font-family:'JetBrains Mono',monospace;font-size:11.5px;color:var(--ink-faint);margin-top:6px;">
         toutes dépenses confondues, hors virements d'épargne
       </div>
+      ${m6ByCat.length ? `
+      <div style="text-align:left;margin-top:18px;border-top:1px solid var(--line-strong);padding-top:14px;">
+        ${m6ByCat.map(r=>{
+          const info = catInfo(r.category);
+          return `<div style="display:flex;align-items:center;gap:10px;padding:6px 0;">
+            <span style="width:9px;height:9px;border-radius:50%;background:${info.color};flex:0 0 auto;"></span>
+            <span style="flex:1;font-size:13px;color:var(--ink-soft);">${escapeHTML(r.category)}</span>
+            <span style="font-family:'JetBrains Mono',monospace;font-size:13px;font-weight:600;">${fmt(r.avg)}</span>
+          </div>`;
+        }).join('')}
+      </div>` : ''}
     </div>
 
     <h2 class="section-title">Projection</h2>
