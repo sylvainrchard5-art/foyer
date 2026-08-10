@@ -479,24 +479,36 @@
     color:var(--ink-soft);
   }
 
-  /* barres empilées : un mois par ligne, segments = catégories */
-  .mrow{margin-bottom:14px;}
+  /* barres empilées : un mois par ligne, revenus au-dessus des dépenses */
+  .mrow{margin-bottom:18px;}
   .mrow:last-of-type{margin-bottom:6px;}
   .mrow-top{
     display:flex;justify-content:space-between;align-items:baseline;
     gap:10px;margin-bottom:6px;
   }
   .mrow-mois{font-size:12.5px;color:var(--ink);text-transform:capitalize;}
-  .mrow-tot{
-    font-family:'JetBrains Mono',monospace;font-size:12px;
-    font-weight:700;color:var(--ink-soft);
+  .mrow-solde{
+    font-family:'JetBrains Mono',monospace;font-size:12.5px;font-weight:700;
   }
-  .mrow-rail{height:14px;border-radius:4px;background:var(--card-2);overflow:hidden;}
+  .mrow-rail{
+    height:14px;border-radius:4px;background:var(--card-2);
+    overflow:hidden;margin-bottom:3px;
+  }
+  .mrow-rail.thin{height:7px;}
+  .mrow-inc{height:100%;border-radius:4px;background:var(--mint);opacity:.85;}
   .mrow-stack{display:flex;height:100%;border-radius:4px;overflow:hidden;}
   /* un filet sombre entre segments : sans lui, deux catégories de teintes voisines
      (deux oranges par exemple) se lisent comme un seul bloc */
   .mrow-stack span{display:block;height:100%;box-shadow:inset -1px 0 0 var(--card);}
   .mrow-stack span:last-child{box-shadow:none;}
+  .mrow-foot{
+    display:flex;justify-content:space-between;gap:10px;
+    margin-top:5px;font-size:11px;color:var(--ink-faint);
+  }
+  .mrow-foot .dot{
+    display:inline-block;width:6px;height:6px;border-radius:50%;
+    margin-right:5px;vertical-align:middle;
+  }
 
   /* barres par catégorie */
   .catbar{margin:0 0 13px;}
@@ -1173,12 +1185,14 @@ const TOP_CATS = 6; // au-delà, l'empilement devient illisible et les couleurs 
 function periodBreakdown(mks){
   const perMonth = new Map();   // mk -> Map(cat -> montant)
   const totals   = new Map();   // cat -> montant sur toute la période
-  mks.forEach(mk=>perMonth.set(mk, new Map()));
+  const revenus  = new Map();   // mk -> revenus du mois
+  mks.forEach(mk=>{ perMonth.set(mk, new Map()); revenus.set(mk, 0); });
 
   state.transactions.forEach(t=>{
-    if(t.amount>=0 || isSavings(t)) return;
     const mk = monthKey(t.date);
     if(!perMonth.has(mk)) return;
+    if(isSavings(t)) return;               // un virement d'épargne n'est ni un revenu ni une dépense
+    if(t.amount>0){ revenus.set(mk, revenus.get(mk) + t.amount); return; }
     const cat = t.category || 'Non catégorisé';
     const v = Math.abs(t.amount);
     perMonth.get(mk).set(cat, (perMonth.get(mk).get(cat)||0) + v);
@@ -1204,7 +1218,9 @@ function periodBreakdown(mks){
   };
 
   const monthTotals = mks.map(mk=>{
-    let s = 0; perMonth.get(mk).forEach(v=>s+=v); return {mk, total:s, segs:segsFor(mk)};
+    let s = 0; perMonth.get(mk).forEach(v=>s+=v);
+    const rev = revenus.get(mk);
+    return {mk, total:s, revenus:rev, solde:rev-s, segs:segsFor(mk)};
   });
 
   // tendance : dernier mois révolu comparé à la moyenne des mois d'avant
@@ -1224,12 +1240,13 @@ function periodBreakdown(mks){
   }
 
   const grand = [...totals.values()].reduce((a,b)=>a+b,0);
+  const grandRev = [...revenus.values()].reduce((a,b)=>a+b,0);
   const legend = keep.map(c=>({name:c, total:totals.get(c), color:catInfo(c).color}));
   if(hasRest){
     const rest = ranked.slice(TOP_CATS).reduce((s,[,v])=>s+v,0);
     if(rest>0) legend.push({name:'Autres catégories', total:rest, color:'#5C6B62'});
   }
-  return {monthTotals, legend, grand, trend, nMonths:mks.length};
+  return {monthTotals, legend, grand, grandRev, trend, nMonths:mks.length};
 }
 
 function evolutionHTML(){
@@ -1239,26 +1256,40 @@ function evolutionHTML(){
     `<button type="button" class="toggle-btn ${apercuPeriod===n?'active-inc':''}" data-period="${n}">${n} mois</button>`
   ).join('');
 
-  if(b.grand===0){
+  if(b.grand===0 && b.grandRev===0){
     return `<div class="toggle-group" style="margin-bottom:16px;">${btns}</div>
       <div class="card"><div class="empty"><div class="big">Pas encore d’historique</div>
       Aucune dépense sur ${apercuPeriod===1?'le mois précédent':`les ${apercuPeriod} mois précédents`}. Importez un relevé pour remplir cette vue.</div></div>`;
   }
 
-  const maxMonth = Math.max(...b.monthTotals.map(m=>m.total)) || 1;
+  // même échelle pour les deux barres : c'est ce qui rend le déficit visible
+  // d'un coup d'œil, sans avoir à comparer des chiffres
+  const maxMois = Math.max(...b.monthTotals.map(m=>Math.max(m.total, m.revenus))) || 1;
   const moyenne = b.grand / b.nMonths;
+  const moyenneRev = b.grandRev / b.nMonths;
 
   const barres = b.monthTotals.map(m=>{
-    const largeur = Math.round(m.total/maxMonth*100);
     const segs = m.total>0 ? m.segs.map(s=>
       `<span style="width:${(s.value/m.total*100).toFixed(2)}%;background:${s.color};"
              title="${escapeHTML(s.name)} — ${fmt(s.value)}"></span>`).join('') : '';
+    const deficit = m.solde < 0;
     return `<div class="mrow">
       <div class="mrow-top">
         <span class="mrow-mois">${escapeHTML(monthLabel(m.mk))}</span>
-        <span class="mrow-tot">${fmt(m.total)}</span>
+        <span class="mrow-solde" style="color:${deficit?'var(--coral)':'var(--mint)'}">
+          ${deficit?'−':'+'}${fmt(Math.abs(m.solde))}
+        </span>
       </div>
-      <div class="mrow-rail"><div class="mrow-stack" style="width:${Math.max(2,largeur)}%">${segs}</div></div>
+      <div class="mrow-rail thin">
+        <div class="mrow-inc" style="width:${Math.max(1,Math.round(m.revenus/maxMois*100))}%"></div>
+      </div>
+      <div class="mrow-rail">
+        <div class="mrow-stack" style="width:${Math.max(1,Math.round(m.total/maxMois*100))}%">${segs}</div>
+      </div>
+      <div class="mrow-foot">
+        <span><i class="dot" style="background:var(--mint)"></i>${fmt(m.revenus)} encaissés</span>
+        <span>${fmt(m.total)} dépensés</span>
+      </div>
     </div>`;
   }).join('');
 
@@ -1267,7 +1298,7 @@ function evolutionHTML(){
                     : `<span style="color:var(--ink-faint);">=</span>`;
 
   const lignes = b.legend.map(c=>{
-    const pct = Math.round(c.total/b.grand*100);
+    const pct = b.grand>0 ? Math.round(c.total/b.grand*100) : 0;
     const t = b.trend.get(c.name);
     // « Autres catégories » regroupe tout ce qui sort du haut de classement :
     // il s'ouvre aussi, sinon les erreurs qui s'y cachent restent hors d'atteinte
@@ -1287,8 +1318,13 @@ function evolutionHTML(){
       ${barres}
       <div style="margin-top:4px;padding-top:14px;border-top:1px solid var(--line);display:flex;justify-content:space-between;font-size:12px;color:var(--ink-soft);">
         <span>Moyenne mensuelle</span>
-        <span style="font-family:'JetBrains Mono',monospace;font-weight:700;color:var(--ink);">${fmt(moyenne)}</span>
+        <span style="font-family:'JetBrains Mono',monospace;font-weight:700;">
+          <span style="color:var(--mint);">${fmt(moyenneRev)}</span>
+          <span style="color:var(--ink-faint);"> / </span>
+          <span style="color:var(--ink);">${fmt(moyenne)}</span>
+        </span>
       </div>
+      <div style="font-size:11px;color:var(--ink-faint);text-align:right;margin-top:3px;">encaissé / dépensé</div>
     </div>
     <div class="card">
       ${lignes}
