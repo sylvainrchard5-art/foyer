@@ -1128,8 +1128,8 @@ function topHeaderHTML(){
     <p class="balance-label">Solde total <span style="opacity:.55;font-size:10px;">· toucher pour ajuster</span></p>
     <p class="balance" id="balance-adjust" style="cursor:pointer;">${bal.sign}${bal.ent}<span class="cents">,${bal.cents} €</span></p>
     <div class="flow-row">
-      <div class="flow-chip in">
-        <div class="tag"><span class="arrow" style="color:var(--mint)">↗</span> Entrées du mois</div>
+      <div class="flow-chip in drillable" data-drill="${REVENUS}">
+        <div class="tag"><span class="arrow" style="color:var(--mint)">↗</span> Entrées du mois ›</div>
         <div class="val">+${fmt(inc).replace('-','')}</div>
       </div>
       <div class="flow-chip out">
@@ -1376,9 +1376,18 @@ function openDrill(cat, period){
 }
 function closeDrill(){ drill = null; drillQ = ''; render(); window.scrollTo(0,0); }
 
+// Les mois couverts par la vue détaillée. Contrairement au graphique d'évolution,
+// qui écarte le mois en cours pour ne comparer que des mois pleins, la vue
+// détaillée est un outil de CORRECTION : exclure le mois en cours y rendrait
+// invisibles les opérations les plus récentes, celles qu'on veut justement
+// reclasser après un import.
+function drillMonths(period){
+  return [todayISO().slice(0,7), ...lastMonths(period)];
+}
+
 // Opérations de la catégorie sur la période, filtrées par la recherche
 function drillTx(){
-  const mks = new Set(lastMonths(drill.period));
+  const mks = new Set(drillMonths(drill.period));
   const q = drillQ.trim().toLowerCase();
   const haut = estAutres() ? catsDuHaut(drill.period) : null;
   return state.transactions
@@ -1419,7 +1428,9 @@ function drillHTML(){
   const multi = autres || revenus;
   const titre = autres ? 'Autres catégories' : revenus ? 'Revenus encaissés' : drill.cat;
   const info = autres ? {color:'#8FA096'} : revenus ? {color:'#5EE2A0'} : catInfo(drill.cat);
-  const per = drill.period===1 ? 'le mois précédent' : `les ${drill.period} derniers mois`;
+  const per = drill.period===1
+    ? 'ce mois-ci et le précédent'
+    : `ce mois-ci et les ${drill.period} précédents`;
 
   // regroupement par mois : on garde le repère temporel de l'Aperçu
   const byMonth = new Map();
@@ -3340,6 +3351,11 @@ function attachHandlers(){
   document.querySelectorAll('nav.bottom button').forEach(b=>{
     // changer d'onglet referme la vue détaillée, sinon elle resterait affichée par-dessus
     b.onclick = ()=>{ drill = null; state.tab = b.dataset.tab; render(); };
+  });
+  // l'en-tête est rendu sur tous les onglets, y compris par-dessus une vue
+  // détaillée : son raccourci vers les revenus doit donc être câblé avant tout
+  document.querySelectorAll('header.top [data-drill]').forEach(el=>{
+    el.onclick = ()=>openDrill(el.dataset.drill, apercuPeriod);
   });
   if(drill){ attachDrillHandlers(); return; }
   const balEl = document.getElementById('balance-adjust');
