@@ -444,6 +444,8 @@
     font-family:'Sora',sans-serif;font-size:11px;font-weight:700;
     letter-spacing:.14em;text-transform:uppercase;color:var(--ink-soft);
   }
+  .drill-open{cursor:pointer;}
+  .drill-open:active{opacity:.6;}
   .drill-row{padding:12px 0;border-bottom:1px solid var(--line);}
   .drill-row:last-child{border-bottom:none;}
   .drill-head{display:flex;align-items:baseline;justify-content:space-between;gap:10px;}
@@ -1464,11 +1466,13 @@ function drillHTML(){
       const ci = catInfo(c);
       return `
       <div class="drill-row">
-        <div class="drill-head">
-          <span class="drill-date">${t.date.split('-').reverse().slice(0,2).join('/')}</span>
-          <span class="drill-amt" style="color:${revenus?'var(--mint)':'var(--coral)'}">${revenus?'+':''}${fmt(Math.abs(t.amount))}</span>
+        <div class="drill-open" data-drilledit="${t.id}">
+          <div class="drill-head">
+            <span class="drill-date">${t.date.split('-').reverse().slice(0,2).join('/')}</span>
+            <span class="drill-amt" style="color:${revenus?'var(--mint)':'var(--coral)'}">${revenus?'+':''}${fmt(Math.abs(t.amount))}</span>
+          </div>
+          <div class="drill-desc">${escapeHTML(t.description||'(sans libellé)')}</div>
         </div>
-        <div class="drill-desc">${escapeHTML(t.description||'(sans libellé)')}</div>
         <div class="drill-foot">
           ${multi ? `<span class="drill-tag" style="color:${ci.color};border-color:${ci.color}55;">${escapeHTML(c)}</span>` : '<span></span>'}
           <select class="drill-cat" data-recat="${t.id}">${catOpts(c)}</select>
@@ -1499,8 +1503,8 @@ function drillHTML(){
     </div>
 
     <p class="muted" style="font-size:11.5px;line-height:1.6;margin:0 0 8px;">
-      Changez la catégorie d’une ligne avec le menu déroulant. Pour corriger une enseigne en bloc,
-      filtrez son libellé puis utilisez le bouton de reclassement groupé. Chaque correction sert aux imports suivants.
+      Touchez une ligne pour en modifier la date, le montant ou le libellé. Le menu déroulant ne change que la catégorie.
+      Pour corriger une enseigne en bloc, filtrez son libellé puis utilisez le bouton de reclassement groupé.
     </p>`;
 }
 
@@ -1515,6 +1519,12 @@ function attachDrillHandlers(){
     const again = document.getElementById('drill-q');
     if(again){ again.focus(); again.setSelectionRange(again.value.length, again.value.length); }
   };
+
+  // la ligne ouvre l'éditeur complet : c'est la seule voie pour corriger une
+  // date, un montant ou un libellé, que le menu de reclassement ne touche pas
+  document.querySelectorAll('[data-drilledit]').forEach(el=>{
+    el.onclick = ()=>openTxEditor(el.dataset.drilledit);
+  });
 
   document.querySelectorAll('[data-recat]').forEach(sel=>{
     sel.onchange = ()=>{
@@ -3413,20 +3423,26 @@ function attachHandlers(){
   }
 }
 
+// Charge une opération dans le formulaire d'édition (date, montant, catégorie,
+// libellé) et bascule sur l'onglet Ajouter. L'identifiant est conservé, donc
+// l'enregistrement met à jour la ligne au lieu d'en créer une seconde.
+function openTxEditor(id){
+  const t = state.transactions.find(x=>x.id===id);
+  if(!t) return;
+  addFormState = {
+    id:t.id, type:t.amount<0?'expense':'income', date:t.date,
+    amount:String(Math.abs(t.amount)), category:t.category,
+    description:t.description||'', details:t.details? JSON.parse(JSON.stringify(t.details)) : []
+  };
+  drill = null;
+  state.tab='ajouter';
+  render();
+  window.scrollTo(0,0);
+}
+
 function attachRowHandlers(){
   document.querySelectorAll('[data-row]').forEach(el=>{
-    el.onclick = ()=>{
-      const t = state.transactions.find(x=>x.id===el.dataset.row);
-      if(!t) return;
-      addFormState = {
-        id:t.id, type:t.amount<0?'expense':'income', date:t.date,
-        amount:String(Math.abs(t.amount)), category:t.category,
-        description:t.description||'', details:t.details? JSON.parse(JSON.stringify(t.details)) : []
-      };
-      state.tab='ajouter';
-      render();
-      window.scrollTo(0,0);
-    };
+    el.onclick = ()=>openTxEditor(el.dataset.row);
   });
 }
 
