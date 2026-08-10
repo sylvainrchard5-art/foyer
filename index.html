@@ -3442,7 +3442,56 @@ function moisPanelHTML(mk){
   `;
 }
 
-let histView = 'mois'; // 'mois' = synthèse mensuelle, 'liste' = opérations détaillées
+let histView = 'mois'; // 'mois' = synthèse mensuelle, 'liste' = opérations détaillées, 'doublons' = contrôle des doublons
+
+// ---------- CONTRÔLEUR DE DOUBLONS ----------
+// Même signature que le rapprochement d'import (date + montant + libellé) :
+// une opération saisie deux fois à la main, ou glissée par un import antérieur
+// à la protection anti-doublon, se retrouve ici plutôt que d'ausculter tout
+// l'historique à l'œil. On garde le doublon le plus ancien (premier saisi) par
+// défaut, le ou les autres exemplaires sont proposés à la suppression.
+function dupKeyTx(t){
+  return `${t.date}|${Number(t.amount).toFixed(2)}|${(t.description||'').trim().toLowerCase()}`;
+}
+function findDuplicateGroups(){
+  const groups = new Map();
+  state.transactions.forEach(t=>{
+    const k = dupKeyTx(t);
+    if(!groups.has(k)) groups.set(k, []);
+    groups.get(k).push(t);
+  });
+  return [...groups.values()]
+    .filter(g=>g.length>1)
+    .map(g=>g.slice().sort((a,b)=>(a.createdAt||0)-(b.createdAt||0)))
+    .sort((a,b)=>b[0].date.localeCompare(a[0].date));
+}
+function doublonsHTML(){
+  const groups = findDuplicateGroups();
+  const nExtra = groups.reduce((s,g)=>s+g.length-1, 0);
+  if(!groups.length){
+    return `<div class="card"><div class="empty" style="padding:28px 10px;"><div class="big">Aucun doublon détecté</div>Deux opérations sont considérées comme doublons si elles partagent la même date, le même montant et le même libellé.</div></div>`;
+  }
+  return `
+    <div class="banner warn" style="margin-bottom:14px;">
+      ${nExtra} exemplaire${nExtra>1?'s':''} en trop sur ${groups.length} groupe${groups.length>1?'s':''} de doublons.
+      <button type="button" class="toggle-btn active-exp" id="btn-clean-all-dupes" style="margin-top:10px;padding:9px;">Supprimer tous les doublons (garder le plus ancien)</button>
+    </div>
+    ${groups.map((g,gi)=>`
+    <div class="card" style="padding:14px 16px;">
+      <div class="muted" style="margin-bottom:8px;">${g.length} exemplaires identiques · ${g[0].date.split('-').reverse().slice(0,2).join('/')} · ${fmt(Math.abs(g[0].amount))}</div>
+      ${g.map((t,i)=>`
+        <div class="ledger-row" style="cursor:default;">
+          <span class="cat-badge" style="background:${catInfo(t.category).color}22;color:${catInfo(t.category).color};border:1px solid ${catInfo(t.category).color}44">${(t.category||'?').charAt(0).toUpperCase()}</span>
+          <div class="info">
+            <div class="desc">${escapeHTML(t.description||'(sans libellé)')}${i===0?' <span style="color:var(--mint);font-weight:600;">· conservé</span>':''}</div>
+            <div class="meta">${escapeHTML(t.category)}</div>
+          </div>
+          <div class="amount ${t.amount<0?'neg':'pos'}">${t.amount<0?'−':'+'}${fmt(Math.abs(t.amount))}</div>
+          ${i>0 ? `<button class="rm" data-dupe-del="${t.id}" style="margin-left:6px;">×</button>` : ''}
+        </div>`).join('')}
+    </div>`).join('')}
+  `;
+}
 function historiqueHTML(){
   const months = Array.from(new Set(state.transactions.map(t=>monthKey(t.date)))).filter(Boolean).sort().reverse();
   const f = state.historyFilters;
@@ -3454,6 +3503,7 @@ function historiqueHTML(){
   if(f.q) list = list.filter(t=>(t.description||'').toLowerCase().includes(f.q.toLowerCase()));
   list.sort((a,b)=>b.date.localeCompare(a.date));
   const totalShown = list.reduce((s,t)=>s+t.amount,0);
+  const nDup = findDuplicateGroups().reduce((s,g)=>s+g.length-1, 0);
 
   return `
     <h2 class="section-title">Historique</h2>
@@ -3471,9 +3521,10 @@ function historiqueHTML(){
     <div class="toggle-group" style="margin-bottom:16px;">
       <button type="button" class="toggle-btn ${histView==='mois'?'active-inc':''}" data-hview="mois">Le mois</button>
       <button type="button" class="toggle-btn ${histView==='liste'?'active-exp':''}" data-hview="liste">Opérations</button>
+      <button type="button" class="toggle-btn ${histView==='doublons'?'active-exp':''}" data-hview="doublons">Doublons${nDup>0?` (${nDup})`:''}</button>
     </div>
 
-    ${histView==='mois' ? moisPanelHTML(panelMk) : `
+    ${histView==='mois' ? moisPanelHTML(panelMk) : histView==='doublons' ? doublonsHTML() : `
     <input type="text" id="hf-q" placeholder="Rechercher un libellé…" value="${escapeHTML(f.q)}" style="margin-bottom:16px;">
     <div class="card">
       <div style="display:flex;justify-content:space-between;margin-bottom:10px;align-items:center;">
@@ -4099,6 +4150,30 @@ function attachHistoriqueHandlers(){
     restoreBtn.onclick = ()=>restoreInput.click();
     restoreInput.onchange = handleRestoreJSON;
   }
+  document.querySelectorAll('[data-dupe-del]').forEach(b=>{
+    b.onclick = async ()=>{
+      const id = b.dataset.dupeDel;
+      if(!await askConfirm('Supprimer cet exemplaire en double ?')) return;
+      state.transactions = state.transactions.filter(t=>t.id!==id);
+      markDeleted(id);
+      saveData();
+      showToast('Doublon supprimé', 'ok');
+      render();
+    };
+  });
+  const cleanAll = document.getElementById('btn-clean-all-dupes');
+  if(cleanAll) cleanAll.onclick = async ()=>{
+    const groups = findDuplicateGroups();
+    const nExtra = groups.reduce((s,g)=>s+g.length-1, 0);
+    if(!nExtra) return;
+    if(!await askConfirm(`Supprimer ${nExtra} exemplaire(s) en double ? Le plus ancien de chaque groupe est conservé, les autres sont supprimés définitivement.`)) return;
+    const toDelete = groups.flatMap(g=>g.slice(1).map(t=>t.id));
+    state.transactions = state.transactions.filter(t=>!toDelete.includes(t.id));
+    toDelete.forEach(markDeleted);
+    saveData();
+    showToast(`${toDelete.length} doublon(s) supprimé(s)`, 'ok');
+    render();
+  };
   attachRowHandlers();
 }
 
