@@ -286,24 +286,6 @@
   }
   nav.bottom button.active svg{stroke-width:2.1;}
 
-  /* bouton central « Ajouter » : surélevé, scindé dépense / revenu */
-  .fab-add{
-    flex:0 0 auto;display:flex;align-self:center;
-    margin:-26px 4px 0;border-radius:19px;overflow:hidden;
-    box-shadow:0 10px 26px -8px rgba(0,0,0,.6);
-    border:1px solid var(--line-strong);
-  }
-  .fab-add button{
-    width:34px;height:52px;border:none;cursor:pointer;
-    font-family:'Sora',sans-serif;font-size:22px;font-weight:700;line-height:1;
-    display:flex;align-items:center;justify-content:center;
-    transition:filter .15s ease;
-  }
-  .fab-add button:active{filter:brightness(1.15);}
-  .fab-add button[data-fab="expense"]{background:var(--coral);color:#2A0E08;}
-  .fab-add button[data-fab="income"]{background:var(--mint);color:#0A1410;}
-  .fab-add.active{box-shadow:0 10px 26px -8px rgba(0,0,0,.6),0 0 0 2px var(--ink) inset;}
-
   .filters{display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;}
   .filters select, .filters input{flex:1;min-width:110px;padding:10px 12px;font-size:13px;}
 
@@ -1173,24 +1155,15 @@ const NAV_ICONS = {
 function bottomNavHTML(){
   const tabs = [
     {id:'apercu', label:'Aperçu'},
+    {id:'ajouter', label:'Ajouter'},
     {id:'previsionnel', label:'Prévu'},
     {id:'planning', label:'Agenda'},
     {id:'importer', label:'Importer'},
     {id:'historique', label:'Historique'}
   ];
-  const half = Math.ceil(tabs.length/2);
-  // le bouton « Ajouter » est surélevé et scindé en deux : un tap suffit pour
-  // ouvrir directement une dépense (−, corail) ou un revenu (+, menthe), sans
-  // passer par l'onglet puis par le bouton dépense/revenu à l'intérieur.
-  const fab = `<div class="fab-add ${state.tab==='ajouter'?'active':''}">
-      <button data-fab="expense" aria-label="Ajouter une dépense">−</button>
-      <button data-fab="income" aria-label="Ajouter un revenu">+</button>
-    </div>`;
-  const left = tabs.slice(0, half).map(t=>
-    `<button data-tab="${t.id}" class="${state.tab===t.id?'active':''}">${NAV_ICONS[t.id]}${t.label}</button>`).join('');
-  const right = tabs.slice(half).map(t=>
-    `<button data-tab="${t.id}" class="${state.tab===t.id?'active':''}">${NAV_ICONS[t.id]}${t.label}</button>`).join('');
-  return '<nav class="bottom">' + left + fab + right + '</nav>';
+  return '<nav class="bottom">' + tabs.map(t=>
+    `<button data-tab="${t.id}" class="${state.tab===t.id?'active':''}">${NAV_ICONS[t.id]}${t.label}</button>`
+  ).join('') + '</nav>';
 }
 
 function tabContentHTML(){
@@ -2289,6 +2262,27 @@ function avgVariableExpenses(){
   return Math.max(0, avg - recCharges);
 }
 
+// Dépenses moyennes sur N mois complets (tout confondu, épargne exclue) —
+// affiché tel quel dans Prévisionnel, à ne pas confondre avec avgVariableExpenses
+// qui sert au calcul de projection (elle, nette des charges récurrentes, sur 3 mois).
+function avgExpensesOverMonths(n){
+  const now = new Date();
+  const keys = [];
+  for(let i=1;i<=n;i++){
+    const total = now.getMonth()-i;
+    const y = now.getFullYear() + Math.floor(total/12);
+    const m = ((total%12)+12)%12;
+    keys.push(`${y}-${String(m+1).padStart(2,'0')}`);
+  }
+  const parMois = keys.map(k=>({
+    k,
+    total: state.transactions.filter(t=>monthKey(t.date)===k && t.amount<0 && !isSavings(t))
+      .reduce((s,t)=>s+Math.abs(t.amount),0)
+  })).filter(m=>m.total>0);
+  const avg = parMois.length ? parMois.reduce((s,m)=>s+m.total,0)/parMois.length : 0;
+  return {avg, moisCouverts:parMois.length, demandes:n};
+}
+
 function projectionSeries(horizon){
   const d = previsionData();
   const now = new Date();
@@ -2527,6 +2521,7 @@ function previsionnelHTML(){
   const finColor = final.value<0 ? 'var(--coral)' : 'var(--mint)';
   const firstNeg = series.find(s=>s.value<0);
   const reservesTotal = state.reserves.reduce((s,r)=>s+r.amount,0);
+  const m6 = avgExpensesOverMonths(6);
 
   // marge mensuelle type (hors mois courant)
   const monthlyMargin = inRec - outRec - avgVar;
@@ -2534,6 +2529,17 @@ function previsionnelHTML(){
   return `
     <h2 class="section-title">Plafonds du mois</h2>
     ${plafondsHTML()}
+
+    <h2 class="section-title">Dépenses moyennes</h2>
+    <div class="card" style="text-align:center;padding:20px 18px;">
+      <div style="font-size:11px;color:var(--ink-soft);text-transform:uppercase;letter-spacing:.14em;margin-bottom:8px;">
+        Moyenne mensuelle · ${m6.moisCouverts} mois sur les 6 derniers${m6.moisCouverts<m6.demandes?' (données incomplètes)':''}
+      </div>
+      <div style="font-family:'Sora',sans-serif;font-size:32px;font-weight:800;color:var(--coral);">${fmt(m6.avg)}</div>
+      <div style="font-family:'JetBrains Mono',monospace;font-size:11.5px;color:var(--ink-faint);margin-top:6px;">
+        toutes dépenses confondues, hors virements d'épargne
+      </div>
+    </div>
 
     <h2 class="section-title">Projection</h2>
     <div class="card" style="padding:22px 18px;">
@@ -3406,21 +3412,9 @@ function historiqueHTML(){
 
 // ---------- HANDLERS ----------
 function attachHandlers(){
-  document.querySelectorAll('nav.bottom > button').forEach(b=>{
+  document.querySelectorAll('nav.bottom button').forEach(b=>{
     // changer d'onglet referme la vue détaillée, sinon elle resterait affichée par-dessus
     b.onclick = ()=>{ drill = null; state.tab = b.dataset.tab; render(); };
-  });
-  document.querySelectorAll('[data-fab]').forEach(b=>{
-    b.onclick = ()=>{
-      drill = null;
-      addFormState = freshAddState();
-      addFormState.type = b.dataset.fab;
-      const fallback = state.categories.find(c=> addFormState.type==='income' ? c.kind==='income' : (c.kind!=='income' && c.name!=='À catégoriser'));
-      if(fallback) addFormState.category = fallback.name;
-      state.tab = 'ajouter';
-      render();
-      window.scrollTo(0,0);
-    };
   });
   // l'en-tête est rendu sur tous les onglets, y compris par-dessus une vue
   // détaillée : son raccourci vers les revenus doit donc être câblé avant tout
