@@ -257,6 +257,8 @@
   }
   .row-action:active{opacity:.8;}
   .row-action.is-on{opacity:1;filter:none;}
+  .legend-row .row-action{font-size:14px;filter:none;opacity:.5;}
+  .legend-row .row-action:active{opacity:1;}
   .rm{
     background:var(--bg-soft);border:1px solid var(--line-strong);border-radius:10px;
     color:var(--coral);font-size:16px;cursor:pointer;width:32px;height:32px;flex-shrink:0;
@@ -1288,7 +1290,11 @@ function periodBreakdown(mks){
     const rest = ranked.slice(TOP_CATS).reduce((s,[,v])=>s+v,0);
     if(rest>0) legend.push({name:'Autres catégories', total:rest, color:'#5C6B62'});
   }
-  return {monthTotals, legend, grand, grandRev, trend, nMonths:mks.length};
+  // liste complète : contrairement à « legend » (limitée à TOP_CATS pour que
+  // l'empilement des barres reste lisible), on y met toutes les catégories qui
+  // ont eu de l'activité sur la période — c'est elle qu'on affiche en dessous.
+  const allCats = ranked.map(([name,total])=>({name, total, color:catInfo(name).color}));
+  return {monthTotals, legend, allCats, grand, grandRev, trend, nMonths:mks.length};
 }
 
 function evolutionHTML(){
@@ -1341,17 +1347,16 @@ function evolutionHTML(){
                     : p<0 ? `<span style="color:var(--mint);">▼ ${Math.abs(p)} %</span>`
                     : `<span style="color:var(--ink-faint);">=</span>`;
 
-  const lignes = b.legend.map(c=>{
+  const lignes = b.allCats.map(c=>{
     const pct = b.grand>0 ? Math.round(c.total/b.grand*100) : 0;
     const t = b.trend.get(c.name);
-    // « Autres catégories » regroupe tout ce qui sort du haut de classement :
-    // il s'ouvre aussi, sinon les erreurs qui s'y cachent restent hors d'atteinte
-    const cible = c.name==='Autres catégories' ? AUTRES : c.name;
-    return `<div class="legend-row drillable" data-drill="${escapeHTML(cible)}">
+    const canDelete = c.name!=='Non catégorisé' && c.name!=='À catégoriser';
+    return `<div class="legend-row drillable" data-drill="${escapeHTML(c.name)}">
       <span class="chip" style="background:${c.color}"></span>
       <span class="label">${escapeHTML(c.name)}</span>
       ${t!==undefined ? `<span class="pct" style="font-size:11px;">${fleche(t)}</span>` : `<span class="pct">${pct} %</span>`}
       <span class="amt" style="color:${c.color}">${fmt(c.total)}</span>
+      ${canDelete ? `<button class="row-action" data-del-cat="${escapeHTML(c.name)}" title="Supprimer cette catégorie">🗑</button>` : ''}
       <span class="drill-arrow">›</span>
     </div>`;
   }).join('');
@@ -2482,21 +2487,28 @@ function moisPrevision(){
           restant, lignes, totalPlafonds, nPlafonds};
 }
 
-// Proposition de plafonds d'après les 3 derniers mois révolus, remise à l'échelle
+// Proposition de plafonds d'après les 6 derniers mois révolus, remise à l'échelle
 // de l'enveloppe disponible : on part des habitudes réelles plutôt que d'une
 // répartition théorique, puis on resserre si le train de vie dépasse les revenus.
 function proposerPlafonds(){
   const p = moisPrevision();
-  const mks = lastMonths(3);
+  const mks = lastMonths(6);
   const moyennes = new Map();
   const fixes = new Set(state.recurring.filter(r=>r.type==='expense').map(r=>r.category));
+
+  // le dénominateur est le nombre de mois où il y a réellement eu de l'activité,
+  // pas systématiquement 6 : sinon un foyer avec 3 mois d'historique se verrait
+  // proposer des plafonds divisés par 6, artificiellement bas.
+  const moisActifs = new Set(state.transactions
+    .filter(t=>t.amount<0 && !isSavings(t) && mks.includes(monthKey(t.date)))
+    .map(t=>monthKey(t.date))).size || 1;
 
   state.transactions.forEach(t=>{
     if(t.amount>=0 || isSavings(t)) return;
     if(!mks.includes(monthKey(t.date))) return;
     const c = t.category || 'Non catégorisé';
     if(fixes.has(c)) return;              // déjà couvert par les charges fixes
-    moyennes.set(c, (moyennes.get(c)||0) + Math.abs(t.amount)/mks.length);
+    moyennes.set(c, (moyennes.get(c)||0) + Math.abs(t.amount)/moisActifs);
   });
 
   const noms = new Set(budgetableCats().map(c=>c.name));
@@ -2600,7 +2612,7 @@ function plafondsHTML(){
     </div>` : ''}
 
     <button class="secondary" id="btn-proposer-plafonds" style="margin-bottom:16px;">
-      Proposer des plafonds d'après mes 3 derniers mois
+      Proposer des plafonds d'après mes 6 derniers mois
     </button>
 
     <div class="card">
@@ -3097,12 +3109,12 @@ function attachPrevisionnelHandlers(){
   const prop = document.getElementById('btn-proposer-plafonds');
   if(prop) prop.onclick = async ()=>{
     const ok = await askConfirm(
-      'Des plafonds vont être proposés d’après vos dépenses des 3 derniers mois, hors charges fixes.\n\n'
+      'Des plafonds vont être proposés d’après vos dépenses des 6 derniers mois, hors charges fixes.\n\n'
       + 'S’ils dépassent ce que vos revenus permettent, ils seront réduits proportionnellement. Vos plafonds actuels seront remplacés.',
       'Proposer');
     if(!ok) return;
     const n = proposerPlafonds();
-    if(!n){ showToast('Pas assez d’historique sur les 3 derniers mois pour proposer des plafonds.', 'error'); return; }
+    if(!n){ showToast('Pas assez d’historique sur les 6 derniers mois pour proposer des plafonds.', 'error'); return; }
     showToast(`${n} plafond(s) proposé(s) — ajustez-les à votre main.`, 'ok');
     render();
   };
@@ -3623,6 +3635,21 @@ function attachHandlers(){
     document.querySelectorAll('[data-drill]').forEach(el=>{
       el.onclick = ()=>openDrill(el.dataset.drill, apercuPeriod);
     });
+    document.querySelectorAll('[data-del-cat]').forEach(btn=>{
+      btn.onclick = async e=>{
+        e.stopPropagation();
+        const name = btn.dataset.delCat;
+        const enUsage = state.transactions.some(t=>t.category===name);
+        const msg = enUsage
+          ? `Supprimer la catégorie « ${name} » ? Les opérations déjà classées dans cette catégorie repasseront en « Non catégorisé ». Les plafonds associés seront retirés.`
+          : `Supprimer la catégorie « ${name} » ?`;
+        if(!await askConfirm(msg, 'Supprimer')) return;
+        deleteCategory(name);
+        saveData();
+        showToast(`Catégorie « ${name} » supprimée`, 'ok');
+        render();
+      };
+    });
     // l'attribut title est inopérant au doigt : un appui sur un segment l'annonce
     document.querySelectorAll('.mrow-stack span').forEach(s=>{
       s.onclick = ()=>showToast(s.getAttribute('title')||'', 'ok');
@@ -3674,13 +3701,21 @@ function attachRowHandlers(){
       e.stopPropagation();
       const t = state.transactions.find(x=>x.id===btn.dataset.makeRecurring);
       if(!t) return;
-      const already = isDeclaredRecurring(t.description);
-      if(already){ showToast('Déjà en dépense récurrente', 'ok'); return; }
-      const label = normLabel(t.description) || t.description || 'Charge';
+      const norm = normLabel(t.description);
+      const existing = state.recurring.find(r=>r.type==='expense' && (r.sourceLabel===norm || normLabel(r.label)===norm));
+      if(existing){
+        // deuxième clic : on retire la charge récurrente correspondante
+        state.recurring = state.recurring.filter(r=>r.id!==existing.id);
+        saveData();
+        showToast(`« ${existing.label} » retirée des charges récurrentes`, 'ok');
+        render();
+        return;
+      }
+      const label = norm || t.description || 'Charge';
       const day = Math.min(28, parseInt(t.date.split('-')[2],10) || 1);
       state.recurring.push({
         id:uid(), label, amount:Math.abs(t.amount), category:t.category,
-        day, type:'expense', sourceLabel:normLabel(t.description), createdAt:Date.now()
+        day, type:'expense', sourceLabel:norm, createdAt:Date.now()
       });
       saveData();
       showToast(`« ${label} » ajoutée aux charges récurrentes`, 'ok');
@@ -3702,6 +3737,23 @@ function renameCategoryRefs(oldName, newName){
   state.recurring.forEach(r=>{ if(r.category===oldName){ r.category=newName; r.updatedAt=stamp; } });
   state.upcoming.forEach(u=>{ if(u.category===oldName){ u.category=newName; u.updatedAt=stamp; } });
   if(state.historyFilters.cat===oldName) state.historyFilters.cat=newName;
+}
+
+// Supprimer une catégorie ne doit ni faire disparaître les opérations déjà
+// classées, ni les laisser accrochées à un nom qui n'existe plus : elles
+// repassent en « Non catégorisé ». Les plafonds associés n'ont plus de sens
+// et sont retirés ; les charges récurrentes / échéances sont reclassées, pas
+// supprimées, pour ne pas faire disparaître un montant attendu sans prévenir.
+function deleteCategory(name){
+  if(name==='Non catégorisé' || name==='À catégoriser') return; // catégories techniques, jamais supprimables
+  const stamp = Date.now();
+  state.categories = state.categories.filter(c=>c.name!==name);
+  markDeleted('cat:'+name);
+  state.transactions.forEach(t=>{ if(t.category===name){ t.category='Non catégorisé'; t.updatedAt=stamp; } });
+  state.recurring.forEach(r=>{ if(r.category===name){ r.category='Non catégorisé'; r.updatedAt=stamp; } });
+  state.upcoming.forEach(u=>{ if(u.category===name){ u.category='Non catégorisé'; u.updatedAt=stamp; } });
+  state.budgets = state.budgets.filter(b=>b.category!==name);
+  if(state.historyFilters.cat===name) state.historyFilters.cat='all';
 }
 
 function attachCategoriesHandlers(){
