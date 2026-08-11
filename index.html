@@ -251,6 +251,16 @@
     background:var(--bg-soft);border:1px solid var(--line-strong);border-radius:10px;
     color:var(--coral);font-size:16px;cursor:pointer;width:36px;height:44px;flex-shrink:0;
   }
+  .row-action{
+    background:none;border:none;cursor:pointer;font-size:15px;flex:0 0 auto;
+    padding:4px 0 4px 8px;opacity:.45;filter:grayscale(1);transition:opacity .15s,filter .15s;
+  }
+  .row-action:active{opacity:.8;}
+  .row-action.is-on{opacity:1;filter:none;}
+  .rm{
+    background:var(--bg-soft);border:1px solid var(--line-strong);border-radius:10px;
+    color:var(--coral);font-size:16px;cursor:pointer;width:32px;height:32px;flex-shrink:0;
+  }
   .detail-sum{
     display:flex;justify-content:space-between;font-family:'JetBrains Mono',monospace;
     font-size:13px;padding:10px 0 2px;border-top:1px solid var(--line-strong);margin-top:8px;color:var(--ink-soft);
@@ -285,6 +295,19 @@
     box-shadow:0 4px 16px -4px rgba(94,226,160,.5);
   }
   nav.bottom button.active svg{stroke-width:2.1;}
+
+  /* bouton flottant qui remplace l'onglet « Ajouter » */
+  #fab-add{
+    position:fixed;right:20px;bottom:84px;z-index:11;
+    width:56px;height:56px;border-radius:50%;border:none;cursor:pointer;
+    background:var(--mint);color:#0A1410;
+    font-family:'Sora',sans-serif;font-size:28px;font-weight:700;line-height:1;
+    display:flex;align-items:center;justify-content:center;
+    box-shadow:0 10px 26px -6px rgba(0,0,0,.6);
+    transition:transform .12s ease;
+  }
+  #fab-add:active{transform:scale(.94);}
+  #fab-add.active{background:var(--coral);}
 
   .filters{display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;}
   .filters select, .filters input{flex:1;min-width:110px;padding:10px 12px;font-size:13px;}
@@ -906,6 +929,9 @@ async function loadData(){
         state.balanceAnchor = parsed.balanceAnchor;
         state.deleted = parsed.deleted;
       }
+      // copie locale : au prochain lancement l'app s'affiche tout de suite avec
+      // ces données pendant que la vraie synchro réseau se fait en tâche de fond
+      try{ localStorage.setItem('foyer-local-cache', JSON.stringify(payload())); }catch(e){}
     }
     loadFailed = false;
   }catch(e){
@@ -1155,7 +1181,6 @@ const NAV_ICONS = {
 function bottomNavHTML(){
   const tabs = [
     {id:'apercu', label:'Aperçu'},
-    {id:'ajouter', label:'Ajouter'},
     {id:'previsionnel', label:'Prévu'},
     {id:'planning', label:'Agenda'},
     {id:'importer', label:'Importer'},
@@ -1163,7 +1188,8 @@ function bottomNavHTML(){
   ];
   return '<nav class="bottom">' + tabs.map(t=>
     `<button data-tab="${t.id}" class="${state.tab===t.id?'active':''}">${NAV_ICONS[t.id]}${t.label}</button>`
-  ).join('') + '</nav>';
+  ).join('') + '</nav>' +
+  `<button id="fab-add" class="${state.tab==='ajouter'?'active':''}" aria-label="Ajouter une opération">+</button>`;
 }
 
 function tabContentHTML(){
@@ -1696,6 +1722,10 @@ function rowHTML(t){
     : `<span class="cat-badge" style="background:${info.color}22;color:${info.color};border:1px solid ${info.color}44">${initial}</span>`;
   const metaCat = toId ? '<span style="color:var(--coral);font-weight:600;">À identifier</span>' : escapeHTML(t.category);
   const recurBadge = isRecurringLabel(t.description, t.amount) ? ' · <span style="color:var(--gold);font-weight:600;">🔁 tous les mois</span>' : '';
+  const alreadyRec = t.amount<0 && isDeclaredRecurring(t.description);
+  const recBtn = (t.amount<0 && !toId)
+    ? `<button class="row-action ${alreadyRec?'is-on':''}" data-make-recurring="${t.id}" title="${alreadyRec?'Déjà en charge récurrente':'Ajouter en dépense récurrente'}">🔁</button>`
+    : '';
   return `
   <div class="ledger-row" data-row="${t.id}" ${rowStyle}>
     ${badgeHTML}
@@ -1704,6 +1734,7 @@ function rowHTML(t){
       <div class="meta">${dateShort} · ${metaCat}${detailsCount}${recurBadge}${t.reconciled?' · ✓ pointé':''}${t.autoCat && t.category!=='À catégoriser' ? ` · <span style="color:var(--ink-faint);">auto : ${escapeHTML(t.autoCat)}</span>` : ''}</div>
     </div>
     <div class="amount ${t.amount<0?'neg':'pos'}">${t.amount<0?'−':'+'}${fmt(Math.abs(t.amount))}</div>
+    ${recBtn}
   </div>`;
 }
 
@@ -3548,6 +3579,14 @@ function attachHandlers(){
     // changer d'onglet referme la vue détaillée, sinon elle resterait affichée par-dessus
     b.onclick = ()=>{ drill = null; state.tab = b.dataset.tab; render(); };
   });
+  const fab = document.getElementById('fab-add');
+  if(fab) fab.onclick = ()=>{
+    drill = null;
+    if(state.tab!=='ajouter') addFormState = freshAddState();
+    state.tab = 'ajouter';
+    render();
+    window.scrollTo(0,0);
+  };
   // l'en-tête est rendu sur tous les onglets, y compris par-dessus une vue
   // détaillée : son raccourci vers les revenus doit donc être câblé avant tout
   document.querySelectorAll('header.top [data-drill]').forEach(el=>{
@@ -3630,6 +3669,31 @@ function attachRowHandlers(){
   document.querySelectorAll('[data-row]').forEach(el=>{
     el.onclick = ()=>openTxEditor(el.dataset.row);
   });
+  document.querySelectorAll('[data-make-recurring]').forEach(btn=>{
+    btn.onclick = e=>{
+      e.stopPropagation();
+      const t = state.transactions.find(x=>x.id===btn.dataset.makeRecurring);
+      if(!t) return;
+      const already = isDeclaredRecurring(t.description);
+      if(already){ showToast('Déjà en dépense récurrente', 'ok'); return; }
+      const label = normLabel(t.description) || t.description || 'Charge';
+      const day = Math.min(28, parseInt(t.date.split('-')[2],10) || 1);
+      state.recurring.push({
+        id:uid(), label, amount:Math.abs(t.amount), category:t.category,
+        day, type:'expense', sourceLabel:normLabel(t.description), createdAt:Date.now()
+      });
+      saveData();
+      showToast(`« ${label} » ajoutée aux charges récurrentes`, 'ok');
+      render();
+    };
+  });
+}
+
+// une transaction est-elle déjà couverte par une charge récurrente déclarée ?
+function isDeclaredRecurring(desc){
+  const norm = normLabel(desc);
+  if(!norm) return false;
+  return state.recurring.some(r=>r.type==='expense' && (r.sourceLabel===norm || normLabel(r.label)===norm));
 }
 
 function renameCategoryRefs(oldName, newName){
@@ -4786,6 +4850,29 @@ if(!window.storage){
 document.addEventListener('visibilitychange', ()=>{
   if(!document.hidden && state.loaded) loadData();
 });
+
+// Au premier affichage, l'app attendait la réponse réseau avant de dessiner quoi
+// que ce soit : sur un réseau lent, l'écran restait vide plusieurs secondes.
+// On affiche donc d'abord la dernière copie connue (instantané), et loadData()
+// vient ensuite fusionner la vraie version distante par-dessus, en tâche de fond.
+try{
+  const cached = localStorage.getItem('foyer-local-cache');
+  if(cached){
+    const c = normalizeData(JSON.parse(cached));
+    state.transactions = c.transactions;
+    mergeCategories(c.categories);
+    state.recurring = c.recurring;
+    state.upcoming = c.upcoming;
+    state.reserves = c.reserves;
+    state.budgets = c.budgets;
+    state.events = c.events;
+    state.notes = c.notes;
+    state.balanceAnchor = c.balanceAnchor;
+    state.deleted = c.deleted;
+    state.loaded = true;
+    render();
+  }
+}catch(e){ /* cache corrompu ou absent : le chargement réseau prendra le relais normalement */ }
 
 loadData();
 })();
